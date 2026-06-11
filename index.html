@@ -670,7 +670,7 @@ body.tag-editing #ov-add-wrap { display:flex !important; }
 
   <div id="ml-status" class="ml-status-bar loading">
     <div class="ml-dot gray"></div>
-    <span id="ml-status-text">Conectando à API…</span>Conectando à API…
+    <span id="ml-status-text">Conectando à API…</span>
   </div>
 
   <!-- Setup instructions (shown when proxy offline) -->
@@ -1254,9 +1254,9 @@ async function mlSearch() {
 }
 
 async function initML() {
-  setStatus('loading', 'Verificando conexão com o proxy local…');
+  setStatus('loading', 'Conectando à API…');
   try {
-    const ping = await fetch(PROXY + '/status', { signal: AbortSignal.timeout(3000) });
+    const ping = await fetch(PROXY + '/status', { signal: AbortSignal.timeout(5000) });
     if (!ping.ok) throw new Error('proxy offline');
     mlProxyOnline = true;
     setStatus('connected', '✅  API conectada — carregando dados…');
@@ -1348,7 +1348,7 @@ async function loadMLData(query) {
 
 // Auto-check when page loads (silent, no flicker on other tabs)
 window.addEventListener('load', () => {
-  fetch(PROXY + '/status', { signal: AbortSignal.timeout(1500) })
+  fetch(PROXY + '/status', { signal: AbortSignal.timeout(5000) })
     .then(r => r.ok && r.json())
     .then(d => { if (d && d.status === 'ok') {
       document.getElementById('tab-ml').innerHTML = 'Mercado Livre API <span style="background:#16a34a;color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:600">● LIVE</span>';
