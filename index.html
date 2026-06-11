@@ -9,7 +9,7 @@
 :root { color-scheme: light; }hh
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f2; color: #111; }
-
+h
 .topbar { background: #111; color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
 .brand { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
 .brand .pulse { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; }
@@ -809,7 +809,7 @@ async function ovSearch() {
   // Try /platforms endpoint first (multi-platform)
   let platData = null;
   try {
-    const r = await fetch(`${_mlEndpoint}/platforms?q=${encodeURIComponent(query)}&limit=10`, { signal: AbortSignal.timeout(12000) });
+    const r = await fetch(`/api/api/api/platforms?q=${encodeURIComponent(query)}&limit=10`, { signal: AbortSignal.timeout(12000) });
     if (r.ok) platData = await r.json();
   } catch(e) {}
 
@@ -1210,7 +1210,7 @@ function showPage(id, btn) {
 }
 
 // ---- MERCADO LIVRE API INTEGRATION ----
-var _mlEndpoint = '/api/api/api';
+
 var mlCondChart = null;
 var mlProxyOnline = false;
 
@@ -1256,15 +1256,15 @@ async function mlSearch() {
 async function initML() {
   setStatus('loading', 'Conectando à API…');
   try {
-    const ping = await fetch(_mlEndpoint + '/status', { signal: AbortSignal.timeout(5000) });
-    if (!ping.ok) throw new Error('_mlEndpoint offline');
+    const ping = await fetch('/api/api/api/status', { signal: AbortSignal.timeout(5000) });
+    if (!ping.ok) throw new Error('api offline');
     mlProxyOnline = true;
     setStatus('connected', '✅  API conectada — carregando dados…');
     const q = document.getElementById('ml-search-input').value.trim() || 'tênis masculino';
     await loadMLData(q);
   } catch (e) {
     mlProxyOnline = false;
-    setStatus('disconnected', '⚠️  _mlEndpoint offline — execute <strong>node ml-_mlEndpoint.js</strong> no terminal para ativar dados reais');
+    setStatus('disconnected', '⚠️  API indisponível — tente novamente em instantes');
     document.getElementById('ml-setup').style.display = '';
     document.getElementById('ml-live').style.display = 'none';
   }
@@ -1274,8 +1274,8 @@ async function loadMLData(query) {
   window._mlLoaded = true;
   const q = encodeURIComponent(query);
   const [searchData, trendsData] = await Promise.allSettled([
-    fetch(`${_mlEndpoint}/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json()),
-    fetch(_mlEndpoint + '/trends').then(r => r.json())
+    fetch(`/api/api/api/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json()),
+    fetch('/api/api/api/trends').then(r => r.json())
   ]);
 
   document.getElementById('ml-setup').style.display = 'none';
@@ -1348,7 +1348,7 @@ async function loadMLData(query) {
 
 // Auto-check when page loads (silent, no flicker on other tabs)
 window.addEventListener('load', () => {
-  fetch(_mlEndpoint + '/status', { signal: AbortSignal.timeout(5000) })
+  fetch('/api/api/api/status', { signal: AbortSignal.timeout(5000) })
     .then(r => r.ok && r.json())
     .then(d => { if (d && d.status === 'ok') {
       document.getElementById('tab-ml').innerHTML = 'Mercado Livre API <span style="background:#16a34a;color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:600">● LIVE</span>';
