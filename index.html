@@ -226,7 +226,7 @@ body.tag-editing #ov-add-wrap { display:flex !important; }
 
   <!-- Results (shown after search) -->
   <div id="ov-results" style="display:none">
-    <div id="ov-proxy-warn" class="insight amber" style="display:none;margin-bottom:16px">
+    <div id="ov-_mlEndpoint-warn" class="insight amber" style="display:none;margin-bottom:16px">
       <div class="insight-label">API indisponível</div>
       <p>Não foi possível conectar ao servidor de dados. Os KPIs abaixo são de referência.</p>
     </div>
@@ -673,14 +673,14 @@ body.tag-editing #ov-add-wrap { display:flex !important; }
     <span id="ml-status-text">Conectando à API…</span>
   </div>
 
-  <!-- Setup instructions (shown when proxy offline) -->
+  <!-- Setup instructions (shown when _mlEndpoint offline) -->
   <div id="ml-setup" class="card" style="display:none">
     <div class="card-header"><span class="card-title">API indisponível</span></div>
     <p style="font-size:13px;color:#555;margin-bottom:16px">Não foi possível conectar ao servidor de dados. Aguarde alguns instantes e tente novamente.</p>
     <button onclick="initML()" style="background:#1e40af;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px">↻ Tentar novamente</button>
   </div>
 
-  <!-- Live data sections (shown when proxy online) -->
+  <!-- Live data sections (shown when _mlEndpoint online) -->
   <div id="ml-live" style="display:none">
     <div class="kpis" id="ml-kpis"></div>
 
@@ -802,22 +802,22 @@ async function ovSearch() {
   document.getElementById('ov-sub').textContent = 'Comparativo de mercado em múltiplas plataformas.';
   document.getElementById('ov-placeholder').style.display = 'none';
   document.getElementById('ov-results').style.display = '';
-  document.getElementById('ov-proxy-warn').style.display = 'none';
+  document.getElementById('ov-_mlEndpoint-warn').style.display = 'none';
 
   renderMiniTrend();
 
   // Try /platforms endpoint first (multi-platform)
   let platData = null;
   try {
-    const r = await fetch(`${PROXY}/platforms?q=${encodeURIComponent(query)}&limit=10`, { signal: AbortSignal.timeout(12000) });
+    const r = await fetch(`${_mlEndpoint}/platforms?q=${encodeURIComponent(query)}&limit=10`, { signal: AbortSignal.timeout(12000) });
     if (r.ok) platData = await r.json();
   } catch(e) {}
 
   if (platData && platData.platforms) {
     renderPlatformComparison(query, platData.platforms);
   } else {
-    // Proxy offline
-    document.getElementById('ov-proxy-warn').style.display = '';
+    // _mlEndpoint offline
+    document.getElementById('ov-_mlEndpoint-warn').style.display = '';
     document.getElementById('ov-ml-products-wrap').style.display = 'none';
     document.getElementById('ov-kpis').innerHTML = `
       <div class="kpi"><div class="kpi-label">Índice ref.</div><div class="kpi-value">67</div><div class="kpi-sub amber">${query}</div></div>
@@ -1210,7 +1210,7 @@ function showPage(id, btn) {
 }
 
 // ---- MERCADO LIVRE API INTEGRATION ----
-var PROXY = '/api/api/api';
+var _mlEndpoint = '/api/api/api';
 var mlCondChart = null;
 var mlProxyOnline = false;
 
@@ -1256,15 +1256,15 @@ async function mlSearch() {
 async function initML() {
   setStatus('loading', 'Conectando à API…');
   try {
-    const ping = await fetch(PROXY + '/status', { signal: AbortSignal.timeout(5000) });
-    if (!ping.ok) throw new Error('proxy offline');
+    const ping = await fetch(_mlEndpoint + '/status', { signal: AbortSignal.timeout(5000) });
+    if (!ping.ok) throw new Error('_mlEndpoint offline');
     mlProxyOnline = true;
     setStatus('connected', '✅  API conectada — carregando dados…');
     const q = document.getElementById('ml-search-input').value.trim() || 'tênis masculino';
     await loadMLData(q);
   } catch (e) {
     mlProxyOnline = false;
-    setStatus('disconnected', '⚠️  Proxy offline — execute <strong>node ml-proxy.js</strong> no terminal para ativar dados reais');
+    setStatus('disconnected', '⚠️  _mlEndpoint offline — execute <strong>node ml-_mlEndpoint.js</strong> no terminal para ativar dados reais');
     document.getElementById('ml-setup').style.display = '';
     document.getElementById('ml-live').style.display = 'none';
   }
@@ -1274,8 +1274,8 @@ async function loadMLData(query) {
   window._mlLoaded = true;
   const q = encodeURIComponent(query);
   const [searchData, trendsData] = await Promise.allSettled([
-    fetch(`${PROXY}/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json()),
-    fetch(PROXY + '/trends').then(r => r.json())
+    fetch(`${_mlEndpoint}/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json()),
+    fetch(_mlEndpoint + '/trends').then(r => r.json())
   ]);
 
   document.getElementById('ml-setup').style.display = 'none';
@@ -1348,7 +1348,7 @@ async function loadMLData(query) {
 
 // Auto-check when page loads (silent, no flicker on other tabs)
 window.addEventListener('load', () => {
-  fetch(PROXY + '/status', { signal: AbortSignal.timeout(5000) })
+  fetch(_mlEndpoint + '/status', { signal: AbortSignal.timeout(5000) })
     .then(r => r.ok && r.json())
     .then(d => { if (d && d.status === 'ok') {
       document.getElementById('tab-ml').innerHTML = 'Mercado Livre API <span style="background:#16a34a;color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:600">● LIVE</span>';
