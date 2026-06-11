@@ -1334,7 +1334,11 @@ async function loadMLData(query) {
 
     setStatus('connected', `✅  "${query}" — ${results.length} produtos carregados · ${(paging.total||0).toLocaleString('pt-BR')} resultados totais`);
   } else {
-    setStatus('disconnected', '⚠️  Erro ao buscar dados. Tente novamente em instantes.');
+    document.getElementById('ml-kpis').innerHTML = '';
+    document.getElementById('ml-products-title').textContent = `Produtos — ${query}`;
+    document.getElementById('ml-products-badge').textContent = 'busca temporariamente indisponível';
+    document.getElementById('ml-products').innerHTML = '<div style="padding:32px;text-align:center;color:#888;font-size:14px">🔍 A busca de produtos está temporariamente indisponível.<br><span style="font-size:12px;opacity:.7">Os dados de tendências abaixo estão atualizados em tempo real.</span></div>';
+    setStatus('disconnected', '⚠️  Busca de produtos indisponível — tendências ao vivo disponíveis abaixo');
   }
 
   if (trendsData.status === 'fulfilled') {
@@ -1344,6 +1348,10 @@ async function loadMLData(query) {
       ? arr.slice(0, 30).map(t => `<li class="trend-item">${(t.keyword||t.q||t).toString()}</li>`).join('')
       : '<li style="font-size:13px;color:#888">Sem dados de trends disponíveis.</li>';
   }
+    // Upgrade status to connected if search failed but trends loaded
+    if (!(searchData.status === 'fulfilled' && searchData.value && searchData.value.results)) {
+      setStatus('connected', '✅  Tendências em tempo real — busca de produtos indisponível no momento');
+    }
 }
 
 // Auto-check when page loads (silent, no flicker on other tabs)
