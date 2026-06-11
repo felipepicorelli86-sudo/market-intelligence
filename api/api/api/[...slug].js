@@ -244,8 +244,11 @@ module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
-  const slugArr = Array.isArray(req.query.slug) ? req.query.slug : (req.query.slug ? [req.query.slug] : []);
-  const endpoint = '/' + slugArr.join('/');
+  // Parse endpoint from URL path (req.query.slug unreliable in nested api dirs)
+  const _path = new URL(req.url, 'https://x').pathname; // e.g. /api/api/api/status
+  const _parts = _path.split('/').filter(p => p && p !== 'api'); // skip all 'api' segments
+  const endpoint = '/' + _parts.join('/');
+  const slugArr = _parts;
   const q     = req.query.q || 'tenis masculino';
   const limit = parseInt(req.query.limit || '10');
 
