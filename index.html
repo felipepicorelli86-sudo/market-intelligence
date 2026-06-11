@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Intelligence</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f2; color: #111; }
+
+.topbar { background: #111; color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+.brand { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+.brand .pulse { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.topbar-right { font-size: 12px; color: #aaa; }
+.source-tag { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 3px 10px; font-size: 11px; color: #4ade80; }
+
+nav { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 0 28px; display: flex; gap: 0; }
+nav button { padding: 14px 18px; font-size: 13px; border: none; background: none; cursor: pointer; color: #666; border-bottom: 2px solid transparent; transition: all .15s; font-weight: 500; }
+nav button.active { color: #111; border-bottom-color: #111; }
+nav button:hover { color: #111; }
+
+.page { display: none; max-width: 1000px; margin: 0 auto; padding: 28px 24px; }
+.page.active { display: block; }
+
+.hero { margin-bottom: 28px; }
+.hero h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 6px; }
+.hero p { font-size: 14px; color: #666; }
+.hero .data-badge { display: inline-flex; align-items: center; gap: 6px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #16a34a; margin-top: 10px; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.kpi { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 18px 20px; }
+.kpi-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+.kpi-value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.kpi-sub { font-size: 12px; margin-top: 4px; color: #666; }
+.kpi-sub.green { color: #16a34a; }
+.kpi-sub.red { color: #dc2626; }
+.kpi-sub.amber { color: #d97706; }
+
+.card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px 22px; margin-bottom: 16px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-title { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; }
+.card-badge { font-size: 11px; padding: 2px 10px; border-radius: 20px; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.card-badge.amber { background: #fffbeb; color: #d97706; border-color: #fde68a; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.chart-wrap { position: relative; width: 100%; }
+
+.insight { border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; border-left: 3px solid; }
+.insight.green { background: #f0fdf4; border-color: #16a34a; }
+.insight.amber { background: #fffbeb; border-color: #d97706; }
+.insight.blue { background: #eff6ff; border-color: #2563eb; }
+.insight.red { background: #fef2f2; border-color: #dc2626; }
+.insight-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+.insight.green .insight-label { color: #15803d; }
+.insight.amber .insight-label { color: #b45309; }
+.insight.blue .insight-label { color: #1d4ed8; }
+.insight.red .insight-label { color: #b91c1c; }
+.insight p { font-size: 13px; color: #374151; line-height: 1.5; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 12px; color: #666; }
+.legend span { display: flex; align-items: center; gap: 5px; }
+.leg { width: 10px; height: 10px; border-radius: 2px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { text-align: left; padding: 8px 12px; font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #e5e5e5; }
+tbody td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #fafafa; }
+
+.pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+.pill-ml { background: #fee2e2; color: #991b1b; }
+.pill-g { background: #dbeafe; color: #1e40af; }
+.pill-tt { background: #f3e8ff; color: #6b21a8; }
+.pill-sh { background: #ffedd5; color: #9a3412; }
+
+/* Overview search */
+.ov-search-wrap { display: flex; gap: 10px; margin-bottom: 12px; }
+.ov-search-input { flex: 1; padding: 12px 18px; border: 2px solid #e5e5e5; border-radius: 12px; font-size: 15px; outline: none; transition: border-color .15s; background: #fff; }
+.ov-search-input:focus { border-color: #111; }
+.ov-search-btn { padding: 12px 22px; background: #111; color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; white-space: nowrap; }
+.ov-search-btn:hover { background: #333; }
+.ov-search-btn:disabled { background: #999; cursor: default; }
+.ov-placeholder { text-align: center; padding: 48px 20px; color: #aaa; }
+.ov-placeholder svg { display: block; margin: 0 auto 16px; opacity: .3; }
+.ml-tag .tag-del { display:none; margin-left:5px; font-size:11px; opacity:.5; vertical-align:middle; line-height:1; }
+.ml-tag .tag-del:hover { opacity:1; color:#dc2626; }
+body.tag-editing .ml-tag .tag-del { display:inline; }
+body.tag-editing .ml-tag { cursor:default; }
+body.tag-editing #ov-add-wrap { display:flex !important; }
+.ov-placeholder h3 { font-size: 18px; color: #bbb; font-weight: 500; margin-bottom: 6px; }
+.ov-placeholder p { font-size: 13px; }
+/* ML search bar */
+.ml-search-wrap { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.ml-search-input { flex: 1; min-width: 200px; padding: 10px 16px; border: 1px solid #e5e5e5; border-radius: 10px; font-size: 14px; outline: none; transition: border-color .15s; }
+.ml-search-input:focus { border-color: #111; }
+.ml-search-btn { padding: 10px 20px; background: #dc2626; color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s; }
+.ml-search-btn:hover { background: #b91c1c; }
+.ml-search-btn:disabled { background: #999; cursor: default; }
+.ml-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.ml-tag { padding: 5px 14px; border: 1px solid #e5e5e5; border-radius: 20px; font-size: 12px; cursor: pointer; background: #fff; color: #555; transition: all .12s; }
+.ml-tag:hover { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+.ml-tag.active { background: #dc2626; border-color: #dc2626; color: #fff; }
+/* Platform comparison cards */
+.platform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.platform-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 16px 18px; position: relative; overflow: hidden; }
+.platform-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background: var(--pc); }
+.platform-card.loading { opacity: .6; }
+.platform-card.offline { background: #fafafa; }
+.platform-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--pc); margin-bottom: 10px; }
+.platform-kpi { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 2px; }
+.platform-sub { font-size: 11px; color: #888; margin-bottom: 10px; }
+.platform-row { display: flex; justify-content: space-between; font-size: 12px; color: #555; padding: 3px 0; border-bottom: 1px solid #f5f5f5; }
+.platform-row:last-child { border: none; }
+.platform-row span { font-weight: 600; color: #111; }
+.platform-badge-ok { font-size: 10px; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; border-radius: 10px; padding: 1px 8px; }
+.platform-badge-warn { font-size: 10px; background: #fffbeb; color: #d97706; border: 1px solid #fde68a; border-radius: 10px; padding: 1px 8px; }
+.platform-badge-off { font-size: 10px; background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1px 8px; }
+.price-bar-wrap { margin-top: 8px; }
+.price-bar-label { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 3px; }
+.price-bar-track { height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
+.price-bar-fill { height: 100%; border-radius: 3px; background: var(--pc); transition: width .4s; }
+/* ML API tab styles */
+.ml-status-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; }
+.ml-status-bar.connected { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
+.ml-status-bar.disconnected { background: #fffbeb; border: 1px solid #fde68a; color: #b45309; }
+.ml-status-bar.loading { background: #f8fafc; border: 1px solid #e2e8f0; color: #64748b; }
+.ml-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ml-dot.green { background: #16a34a; animation: pulse 2s infinite; }
+.ml-dot.amber { background: #f59e0b; }
+.ml-dot.gray { background: #94a3b8; }
+.prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 8px; }
+.prod-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px 16px; transition: box-shadow .15s; }
+.prod-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+.prod-title { font-size: 13px; font-weight: 500; color: #111; line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.prod-price { font-size: 20px; font-weight: 700; color: #111; letter-spacing: -.02em; }
+.prod-meta { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.prod-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+.prod-badge.new { background: #dbeafe; color: #1e40af; }
+.prod-badge.used { background: #f5f3ff; color: #6d28d9; }
+.prod-badge.sales { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.prod-seller { font-size: 11px; color: #888; margin-top: 4px; }
+.prod-link { font-size: 11px; color: #3b82f6; text-decoration: none; margin-top: 6px; display: inline-block; }
+.prod-link:hover { text-decoration: underline; }
+.trend-list { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }
+.trend-item { background: #fee2e2; color: #991b1b; border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 500; cursor: default; }
+.setup-box { background: #1e1e2e; color: #cdd6f4; border-radius: 12px; padding: 20px 24px; font-family: 'Fira Mono', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.7; }
+.setup-box .cmd { color: #a6e3a1; }
+.setup-box .comment { color: #6c7086; }
+.setup-box .highlight { color: #fab387; }
+
+.bar-wrap { display: flex; align-items: center; gap: 8px; }
+.bar-bg { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; }
+
+.season-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; margin-top: 8px; }
+.month-cell { border-radius: 6px; padding: 8px 4px; text-align: center; }
+.month-cell .month-name { font-size: 10px; color: #888; margin-bottom: 4px; }
+.month-cell .month-val { font-size: 13px; font-weight: 600; }
+
+.footer { text-align: center; font-size: 11px; color: #aaa; padding: 32px; border-top: 1px solid #e5e5e5; margin-top: 16px; }
+
+@media (max-width: 640px) {
+  .grid2, .grid3 { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .season-grid { grid-template-columns: repeat(6, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="pulse"></span>
+    Market Intelligence
+  </div>
+  <div class="topbar-right">
+    <span class="source-tag">✓ Dados reais Google Trends</span>
+    &nbsp; <span id="topbar-produto">Market Intelligence · Brasil</span>
+  </div>
+</div>
+
+<nav>
+  <button class="active" onclick="showPage('overview', this)">Visão Geral</button>
+  <button onclick="showPage('trends', this)">Tendências</button>
+  <button onclick="showPage('sazonalidade', this)">Sazonalidade</button>
+  <button onclick="showPage('plataformas', this)">Plataformas</button>
+  <button onclick="showPage('estrategia', this)">Estratégia</button>
+  <button onclick="showPage('mercadolivre', this)" id="tab-ml">Mercado Livre API</button>
+</nav>
+
+<!-- PAGE: VISÃO GERAL -->
+<div id="page-overview" class="page active">
+  <div class="hero">
+    <h1 id="ov-title">Market Intelligence</h1>
+    <p id="ov-sub">Digite o produto que deseja analisar para ver dados de mercado em tempo real.</p>
+  </div>
+
+  <!-- Search bar -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="ov-search-wrap">
+      <input id="ov-input" class="ov-search-input" type="text" placeholder="Ex: tênis masculino, notebook, smartwatch, mochila…" onkeydown="if(event.key==='Enter') ovSearch()">
+      <button id="ov-btn" class="ov-search-btn" onclick="ovSearch()">Analisar →</button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:11px;color:#aaa;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Favoritos</span>
+      <button id="ov-edit-btn" onclick="toggleTagEdit()" style="font-size:11px;color:#888;background:none;border:1px solid #e5e5e5;border-radius:6px;padding:3px 10px;cursor:pointer">✏️ Editar</button>
+    </div>
+    <div class="ml-suggestions" id="ov-tags"></div>
+    <!-- Add tag input (hidden by default) -->
+    <div id="ov-add-wrap" style="display:none;margin-top:8px;display:none;align-items:center;gap:8px">
+      <input id="ov-add-input" placeholder="Novo produto favorito…" style="flex:1;padding:6px 12px;border:1px solid #e5e5e5;border-radius:8px;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addFavTag()">
+      <button onclick="addFavTag()" style="padding:6px 14px;background:#111;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer;font-weight:500">+ Adicionar</button>
+    </div>
+  </div>
+
+  <!-- Placeholder (antes da busca) -->
+  <div id="ov-placeholder" class="ov-placeholder">
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><circle cx="28" cy="28" r="18" stroke="#ccc" stroke-width="3"/><line x1="41" y1="41" x2="56" y2="56" stroke="#ccc" stroke-width="3" stroke-linecap="round"/></svg>
+    <h3>Nenhum produto selecionado</h3>
+    <p>Escolha uma sugestão acima ou digite o produto que deseja pesquisar.</p>
+  </div>
+
+  <!-- Results (shown after search) -->
+  <div id="ov-results" style="display:none">
+    <div id="ov-proxy-warn" class="insight amber" style="display:none;margin-bottom:16px">
+      <div class="insight-label">Proxy offline</div>
+      <p>Para ver dados reais do Mercado Livre, execute <strong>node ml-proxy.js</strong> no terminal. Os KPIs abaixo são estimativas baseadas nos dados de referência.</p>
+    </div>
+
+    <div class="kpis" id="ov-kpis"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="ov-chart-title">Interesse de busca — últimas 12 semanas</span>
+        <span class="card-badge" id="ov-chart-badge">Referência: tênis masculino</span>
+      </div>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="miniTrend"></canvas>
+      </div>
+    </div>
+
+    <div id="ov-ml-products-wrap" class="card" style="display:none">
+      <div class="card-header">
+        <span class="card-title" id="ov-prod-title">Top produtos</span>
+        <span class="card-badge" id="ov-prod-badge"></span>
+      </div>
+      <div id="ov-prod-grid" class="prod-grid"></div>
+    </div>
+
+    <div class="grid2" id="ov-insights"></div>
+
+    <!-- Plataformas — sempre visível -->
+    <div style="margin-top:8px">
+      <div class="grid2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Volume estimado / mês</span>
+            <span class="card-badge amber">Referência</span>
+          </div>
+          <div class="chart-wrap" style="height:220px">
+            <canvas id="volChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">CPC médio estimado (R$)</span>
+            <span class="card-badge amber">Referência</span>
+          </div>
+          <div class="chart-wrap" style="height:220px">
+            <canvas id="cpcChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Comparativo de canais</span></div>
+        <table>
+          <thead>
+            <tr><th>Plataforma</th><th>Volume/mês</th><th>CPC</th><th>Custo/venda est.</th><th>API</th><th>Recomendação</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="pill pill-g">Google</span></td>
+              <td>~246K</td><td>R$1,50–3,50</td><td>R$15–40</td>
+              <td><span style="color:#16a34a">✓ Keyword Planner</span></td>
+              <td>Fase 1 — maior volume</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-ml">Mercado Livre</span></td>
+              <td>~178K</td><td>R$1,20–1,50</td><td>R$12–25</td>
+              <td><span style="color:#16a34a">✓ API ativa</span></td>
+              <td>Fase 1 — melhor custo/venda</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-sh">Shopee</span></td>
+              <td>~93K</td><td>R$0,40–0,60</td><td>R$6–15</td>
+              <td><span style="color:#16a34a">✓ API ativa</span></td>
+              <td>Fase 1 — menor CPC</td>
+            </tr>
+            <tr>
+              <td><span class="pill pill-tt">TikTok Shop</span></td>
+              <td>~135K</td><td>R$0,40–0,80</td><td>R$8–18</td>
+              <td><span style="color:#d97706">⚠ Aguarda aprovação</span></td>
+              <td>Fase 2 — melhor CPC</td>
+            </tr>
+            <tr>
+              <td><span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:#fef9c3;color:#854d0e">Amazon BR</span></td>
+              <td>~210K</td><td>R$1,00–2,50</td><td>R$10–30</td>
+              <td><span style="color:#d97706">⚠ Requer conta associado</span></td>
+              <td>Fase 2 — grande volume</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: PLATAFORMAS -->
+<div id="page-plataformas" class="page">
+  <div class="hero">
+    <h1>Análise por Plataforma</h1>
+    <p>Onde anunciar e quanto custa em cada canal.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Volume estimado / mês</span><span class="card-badge amber">Referência</span></div>
+      <div class="chart-wrap" style="height:220px"><canvas id="volChart2"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">CPC médio estimado (R$)</span><span class="card-badge amber">Referência</span></div>
+      <div class="chart-wrap" style="height:220px"><canvas id="cpcChart2"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Comparativo detalhado</span></div>
+    <table>
+      <thead><tr><th>Plataforma</th><th>Volume/mês</th><th>CPC</th><th>Custo/venda est.</th><th>API</th><th>Recomendação</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="pill pill-g">Google</span></td>
+          <td>~246K</td><td>R$1,50–3,50</td><td>R$15–40</td>
+          <td><span style="color:#16a34a">✓ Keyword Planner</span></td>
+          <td>Fase 1 — maior volume</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-ml">Mercado Livre</span></td>
+          <td>~178K</td><td>R$1,20–1,50</td><td>R$12–25</td>
+          <td><span style="color:#16a34a">✓ API ativa</span></td>
+          <td>Fase 1 — melhor custo/venda</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-sh">Shopee</span></td>
+          <td>~93K</td><td>R$0,40–0,60</td><td>R$6–15</td>
+          <td><span style="color:#16a34a">✓ API ativa</span></td>
+          <td>Fase 1 — menor CPC</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-tt">TikTok Shop</span></td>
+          <td>~135K</td><td>R$0,40–0,80</td><td>R$8–18</td>
+          <td><span style="color:#d97706">⚠ Aguarda aprovação</span></td>
+          <td>Fase 2 — melhor CPC</td>
+        </tr>
+        <tr>
+          <td><span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:#fef9c3;color:#854d0e">Amazon BR</span></td>
+          <td>~210K</td><td>R$1,00–2,50</td><td>R$10–30</td>
+          <td><span style="color:#d97706">⚠ Requer conta associado</span></td>
+          <td>Fase 2 — grande volume</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <div class="insight green">
+      <div class="insight-label">Melhor custo-benefício imediato</div>
+      <p><strong>Shopee + ML</strong> combinados oferecem o menor CPC médio com APIs já ativas. Recomendado como ponto de entrada antes de aprovação do TikTok Shop.</p>
+    </div>
+    <div class="insight blue">
+      <div class="insight-label">Maior potencial de volume</div>
+      <p><strong>Google + Amazon BR</strong> concentram o maior volume de busca (~456K/mês combinados). Exige investimento maior em CPC mas atinge audiência mais ampla.</p>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: TENDÊNCIAS -->
+<div id="page-trends" class="page">
+  <div class="hero">
+    <h1>Interesse ao longo do tempo</h1>
+    <p>53 semanas de dados reais do Google Trends para "tênis masculino" no Brasil.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Índice semanal de interesse (0–100)</span>
+      <span class="card-badge">Jun 2025 – Jun 2026</span>
+    </div>
+    <div class="chart-wrap" style="height:300px">
+      <canvas id="fullTrend" role="img" aria-label="Série temporal completa de 53 semanas"></canvas>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Top semanas</span></div>
+      <table>
+        <thead><tr><th>Semana</th><th>Índice</th><th>Evento</th></tr></thead>
+        <tbody>
+          <tr><td>23/nov/2025</td><td><strong>100</strong></td><td>🔥 Black Friday</td></tr>
+          <tr><td>30/nov/2025</td><td>90</td><td>Cyber Monday</td></tr>
+          <tr><td>7/dez/2025</td><td>90</td><td>Natal</td></tr>
+          <tr><td>14/dez/2025</td><td>88</td><td>Natal</td></tr>
+          <tr><td>9/nov/2025</td><td>88</td><td>Pré-BF</td></tr>
+          <tr><td>3/ago/2025</td><td>96</td><td>📚 Volta às aulas</td></tr>
+          <tr><td>1/fev/2026</td><td>78</td><td>Verão</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Bottom semanas</span></div>
+      <table>
+        <thead><tr><th>Semana</th><th>Índice</th><th>Contexto</th></tr></thead>
+        <tbody>
+          <tr><td>28/dez/2025</td><td><strong>54</strong></td><td>Pós-Natal</td></tr>
+          <tr><td>22/jun/2025</td><td>58</td><td>Inverno</td></tr>
+          <tr><td>22/mar/2026</td><td>58</td><td>Pós-carnaval</td></tr>
+          <tr><td>15/fev/2026</td><td>57</td><td>Carnaval</td></tr>
+          <tr><td>22/fev/2026</td><td>57</td><td>Carnaval</td></tr>
+          <tr><td>26/abr/2026</td><td>57</td><td>Pós-Páscoa</td></tr>
+          <tr><td>15/jun/2025</td><td>61</td><td>Baixa temporada</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: SAZONALIDADE -->
+<div id="page-sazonalidade" class="page">
+  <div class="hero">
+    <h1>Análise de Sazonalidade</h1>
+    <p>Quando investir mais e quando segurar orçamento — baseado em dados reais.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Índice médio por mês</span>
+      <span class="card-badge">Dados reais Google Trends</span>
+    </div>
+    <div class="chart-wrap" style="height:260px">
+      <canvas id="monthChart" role="img" aria-label="Índice médio de interesse por mês"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Mapa de calor mensal</span></div>
+    <div class="season-grid" id="heatmap"></div>
+    <p style="font-size:11px;color:#aaa;margin-top:12px">Verde escuro = alta demanda · Verde claro = média · Amarelo = baixa · Vermelho = muito baixa</p>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Recomendação de orçamento mensal</span></div>
+    <table>
+      <thead><tr><th>Mês</th><th>Demanda</th><th>Orçamento recomendado</th><th>Estratégia</th></tr></thead>
+      <tbody>
+        <tr><td>Junho–Julho</td><td>Média (67–75)</td><td>Normal</td><td>Manter presença, keywords long tail</td></tr>
+        <tr><td>Agosto</td><td><strong style="color:#16a34a">Alta (76–96)</strong></td><td style="color:#16a34a">+30–50%</td><td>Volta às aulas, esportes, corrida</td></tr>
+        <tr><td>Set–Out</td><td>Média (61–71)</td><td>Normal</td><td>Preparar criativos para Black Friday</td></tr>
+        <tr><td>Novembro</td><td><strong style="color:#16a34a">Pico (76–100)</strong></td><td style="color:#16a34a">+100–150%</td><td>Black Friday — máximo investimento</td></tr>
+        <tr><td>Dezembro</td><td>Alta (73–90)</td><td style="color:#16a34a">+50–80%</td><td>Natal, presentes, kits</td></tr>
+        <tr><td>Jan–Mar</td><td><strong style="color:#dc2626">Baixa (54–78)</strong></td><td style="color:#dc2626">-30%</td><td>Remarketing, liquidação, novidades</td></tr>
+        <tr><td>Abr–Mai</td><td>Média (57–67)</td><td>Normal</td><td>Retomada, lançamentos de coleção</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PAGE: PLATAFORMAS -->
+<div id="page-plataformas" class="page">
+  <div class="hero">
+    <h1>Análise por Plataforma</h1>
+    <p>Onde anunciar e quanto custa em cada canal.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Volume estimado / mês</span></div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="volChart" role="img" aria-label="Volume de buscas por plataforma"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">CPC médio estimado (R$)</span></div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="cpcChart" role="img" aria-label="CPC por plataforma"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Comparativo detalhado</span></div>
+    <table>
+      <thead>
+        <tr><th>Plataforma</th><th>Volume</th><th>CPC</th><th>Custo/venda est.</th><th>Dado disponível</th><th>Recomendação</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="pill pill-g">Google</span></td>
+          <td>~246K/mês</td>
+          <td>R$1,50–3,50</td>
+          <td>R$15–40</td>
+          <td><span style="color:#16a34a">✓ Keyword Planner</span></td>
+          <td>Fase 1 — maior volume</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-ml">Mercado Livre</span></td>
+          <td>~178K/mês</td>
+          <td>R$1,20–1,50</td>
+          <td>R$12–25</td>
+          <td><span style="color:#d97706">⚠ Requer OAuth</span></td>
+          <td>Fase 1 — melhor custo/venda</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-tt">TikTok Ads</span></td>
+          <td>~135K/mês</td>
+          <td>R$0,40–0,80</td>
+          <td>R$8–18</td>
+          <td><span style="color:#d97706">⚠ Requer aprovação API</span></td>
+          <td>Fase 2 — melhor CPC</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-sh">Shopee</span></td>
+          <td>~93K/mês</td>
+          <td>R$0,40–0,60</td>
+          <td>R$6–15</td>
+          <td><span style="color:#dc2626">✗ API limitada</span></td>
+          <td>Fase 3 — baixo ticket</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Top marcas — Mercado Livre (dados públicos)</span></div>
+    <table>
+      <thead><tr><th>Marca</th><th>Tipo</th><th>Volume vendas</th><th>Posição</th></tr></thead>
+      <tbody>
+        <tr><td><strong>HYPERBALL</strong></td><td>Nacional popular</td><td>+100K unidades</td><td>
+          <div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:100%;background:#dc2626"></div></div><span style="font-size:12px">1º</span></div>
+        </td></tr>
+        <tr><td><strong>PUMA</strong></td><td>Internacional</td><td>+100K unidades</td><td>
+          <div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:95%;background:#dc2626"></div></div><span style="font-size:12px">2º</span></div>
+        </td></tr>
+        <tr><td><strong>OLIMP</strong></td><td>Nacional</td><td>+50K unidades</td><td>
+          <div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:55%;background:#f97316"></div></div><span style="font-size:12px">3º</span></div>
+        </td></tr>
+        <tr><td><strong>TRYD</strong></td><td>Nacional</td><td>+50K unidades</td><td>
+          <div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:50%;background:#f97316"></div></div><span style="font-size:12px">4º</span></div>
+        </td></tr>
+        <tr><td><strong>Nike / Adidas</strong></td><td>Internacional premium</td><td>+10K unidades</td><td>
+          <div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:22%;background:#94a3b8"></div></div><span style="font-size:12px">5º+</span></div>
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PAGE: ESTRATÉGIA -->
+<div id="page-estrategia" class="page">
+  <div class="hero">
+    <h1>Plano Estratégico</h1>
+    <p>Roadmap de implementação e recomendações baseadas nos dados coletados.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Roadmap de implementação</span></div>
+    <table>
+      <thead><tr><th>Fase</th><th>Canal</th><th>Investimento</th><th>O que habilita</th><th>Prazo</th></tr></thead>
+      <tbody>
+        <tr style="background:#f0fdf4">
+          <td><strong>Fase 1</strong></td>
+          <td><span class="pill pill-g">Google</span> + <span class="pill pill-ml">ML</span></td>
+          <td>R$2–5K/mês</td>
+          <td>Volume real + API pública ML</td>
+          <td>Imediato</td>
+        </tr>
+        <tr>
+          <td><strong>Fase 2</strong></td>
+          <td><span class="pill pill-tt">TikTok Ads</span></td>
+          <td>R$1–3K/mês</td>
+          <td>Aprovação Marketing API</td>
+          <td>2–4 semanas</td>
+        </tr>
+        <tr>
+          <td><strong>Fase 3</strong></td>
+          <td><span class="pill pill-sh">Shopee</span></td>
+          <td>R$500–1K/mês</td>
+          <td>Monitoramento via scraping</td>
+          <td>1–2 meses</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <div class="insight green">
+        <div class="insight-label">Ação imediata — Agosto</div>
+        <p>Agosto tem o <strong>2º maior pico do ano (96)</strong>. Aumentar orçamento em 40–60% na 1ª quinzena. Focar em "tênis masculino esportivo" e "tênis corrida".</p>
+      </div>
+      <div class="insight green">
+        <div class="insight-label">Preparação Black Friday</div>
+        <p>Iniciar campanha em <strong>outubro</strong> (índice 63–69, CPC mais barato) para capturar listas de remarketing antes do pico de novembro.</p>
+      </div>
+      <div class="insight blue">
+        <div class="insight-label">Credenciais necessárias</div>
+        <p>Para dados em tempo real de ML: cadastro gratuito em <strong>developers.mercadolivre.com.br</strong>. Para TikTok: conta Business + aprovação da Marketing API.</p>
+      </div>
+    </div>
+    <div>
+      <div class="insight amber">
+        <div class="insight-label">Baixa temporada — Jan a Mar</div>
+        <p>Índices caem para 54–68. Manter verba mínima, focar em <strong>remarketing</strong> e liquidação de estoque. Usar esse período para testes A/B de criativos.</p>
+      </div>
+      <div class="insight amber">
+        <div class="insight-label">Carnaval — cuidado</div>
+        <p>Fevereiro tem os <strong>menores índices do ano (57)</strong>. Evitar lançamentos e investimentos pesados nesse período.</p>
+      </div>
+      <div class="insight green">
+        <div class="insight-label">Sistema de monitoramento</div>
+        <p>Coleta <strong>diária</strong> de preços e rankings no ML. Relatório <strong>semanal</strong> de volume + CPC. Dashboard <strong>mensal</strong> consolidado para decisão.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: MERCADO LIVRE API -->
+<div id="page-mercadolivre" class="page">
+  <div class="hero">
+    <h1>Mercado Livre — Pesquisa em tempo real</h1>
+    <p>Busque qualquer produto e veja os mais vendidos, preços e tendências via API oficial.</p>
+  </div>
+
+  <!-- Search bar -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="ml-search-wrap">
+      <input id="ml-search-input" class="ml-search-input" type="text" placeholder="Ex: tênis masculino, notebook, smartphone…" value="tênis masculino" onkeydown="if(event.key==='Enter') mlSearch()">
+      <button id="ml-search-btn" class="ml-search-btn" onclick="mlSearch()">🔍 Pesquisar</button>
+    </div>
+    <div class="ml-suggestions" id="ml-suggestions">
+      <span class="ml-tag active" onclick="mlSetTag(this,'tênis masculino')">👟 Tênis masculino</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'tênis feminino')">👠 Tênis feminino</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'tênis infantil')">🧒 Tênis infantil</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'tênis corrida')">🏃 Tênis corrida</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'tênis nike')">Nike</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'tênis adidas')">Adidas</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'sandália masculina')">🩴 Sandália</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'chinelo masculino')">Chinelo</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'mochila escolar')">🎒 Mochila</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'camiseta masculina')">👕 Camiseta</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'notebook')">💻 Notebook</span>
+      <span class="ml-tag" onclick="mlSetTag(this,'smartphone')">📱 Smartphone</span>
+    </div>
+  </div>
+
+  <div id="ml-status" class="ml-status-bar loading">
+    <div class="ml-dot gray"></div>
+    <span id="ml-status-text">Verificando conexão com o proxy local…</span>
+  </div>
+
+  <!-- Setup instructions (shown when proxy offline) -->
+  <div id="ml-setup" class="card" style="display:none">
+    <div class="card-header"><span class="card-title">Como ativar dados reais</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:16px">O proxy Node.js precisa estar rodando localmente para buscar dados da API do Mercado Livre (necessário por restrições de CORS da API oficial).</p>
+    <div class="setup-box">
+      <div class="comment"># 1. Abra um terminal (CMD ou PowerShell)</div>
+      <div class="comment"># 2. Execute o comando abaixo (caminho completo do arquivo):</div>
+      <div>&nbsp;</div>
+      <div><span class="cmd">node</span> <span class="highlight">"C:\Users\felip\AppData\Roaming\Claude\...\outputs\ml-proxy.js"</span></div>
+      <div>&nbsp;</div>
+      <div class="comment"># Você deve ver:</div>
+      <div class="comment"># ✅ ML Market Intelligence Proxy rodando em http://localhost:3001</div>
+      <div>&nbsp;</div>
+      <div class="comment"># 3. Volte a este painel e clique em "Tentar novamente"</div>
+    </div>
+    <button onclick="initML()" style="margin-top:14px;padding:8px 20px;background:#111;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500">↻ Tentar novamente</button>
+  </div>
+
+  <!-- Live data sections (shown when proxy online) -->
+  <div id="ml-live" style="display:none">
+    <div class="kpis" id="ml-kpis"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="ml-products-title">Top produtos</span>
+        <span class="card-badge" id="ml-products-badge">Carregando…</span>
+      </div>
+      <div id="ml-products" class="prod-grid"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Trending agora no Mercado Livre</span>
+        <span class="card-badge">Tempo real</span>
+      </div>
+      <ul id="ml-trends" class="trend-list"></ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Distribuição de condição</span></div>
+      <div class="chart-wrap" style="height:200px"><canvas id="mlCondChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Dados de interesse: Google Trends · Fonte mercado: Abicalçados / IEMI 2025 · Dados ML: listagem pública · Gerado por Market Intelligence para Felipe Picorelli · Jun 2026
+</div>
+
+<script>
+// ---- OVERVIEW SEARCH ----
+let miniTrendChart = null;
+
+// ---- FAVORITOS EDITÁVEIS ----
+const DEFAULT_FAVS = [
+  { label: '👟 Tênis masculino', q: 'tênis masculino' },
+  { label: '👠 Tênis feminino',  q: 'tênis feminino'  },
+  { label: '🧒 Tênis infantil',  q: 'tênis infantil'  },
+  { label: '🏃 Corrida',         q: 'tênis corrida'   },
+  { label: 'Nike',               q: 'tênis nike'      },
+  { label: 'Adidas',             q: 'tênis adidas'    },
+  { label: '💻 Notebook',        q: 'notebook'        },
+  { label: '📱 Smartphone',      q: 'smartphone'      },
+  { label: '🎒 Mochila',         q: 'mochila'         },
+  { label: '👕 Camiseta',        q: 'camiseta masculina' },
+];
+
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem('mi_favs')) || DEFAULT_FAVS; }
+  catch { return DEFAULT_FAVS; }
+}
+function saveFavs(favs) {
+  try { localStorage.setItem('mi_favs', JSON.stringify(favs)); } catch {}
+}
+
+function renderFavTags() {
+  const favs = loadFavs();
+  const wrap = document.getElementById('ov-tags');
+  wrap.innerHTML = favs.map((f, i) => `
+    <span class="ml-tag" data-idx="${i}" onclick="if(!document.body.classList.contains('tag-editing')) ovTagByQuery('${f.q.replace(/'/g,"\\'")}', this)">
+      ${f.label}
+      <span class="tag-del" onclick="event.stopPropagation();removeFavTag(${i})" title="Remover">✕</span>
+    </span>`).join('');
+}
+
+function ovTagByQuery(q, el) {
+  document.querySelectorAll('#ov-tags .ml-tag').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('ov-input').value = q;
+  ovSearch();
+}
+
+function addFavTag() {
+  const inp = document.getElementById('ov-add-input');
+  const val = inp.value.trim();
+  if (!val) return;
+  const favs = loadFavs();
+  favs.push({ label: val, q: val });
+  saveFavs(favs);
+  inp.value = '';
+  renderFavTags();
+}
+
+function removeFavTag(idx) {
+  const favs = loadFavs();
+  favs.splice(idx, 1);
+  saveFavs(favs);
+  renderFavTags();
+}
+
+function toggleTagEdit() {
+  const editing = document.body.classList.toggle('tag-editing');
+  const btn = document.getElementById('ov-edit-btn');
+  btn.textContent = editing ? '✓ Concluir' : '✏️ Editar';
+  btn.style.borderColor = editing ? '#16a34a' : '#e5e5e5';
+  btn.style.color = editing ? '#16a34a' : '#888';
+}
+
+// Init on load
+renderFavTags();
+
+function ovTag(el, query) {
+  document.querySelectorAll('#ov-tags .ml-tag').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('ov-input').value = query;
+  ovSearch();
+}
+
+async function ovSearch() {
+  const query = document.getElementById('ov-input').value.trim();
+  if (!query) return;
+  const btn = document.getElementById('ov-btn');
+  btn.disabled = true; btn.textContent = 'Buscando…';
+
+  document.getElementById('ov-title').textContent = query.charAt(0).toUpperCase() + query.slice(1) + ' — Brasil';
+  const tp = document.getElementById('topbar-produto');
+  if (tp) tp.textContent = query.charAt(0).toUpperCase() + query.slice(1) + ' · Brasil';
+  document.getElementById('ov-sub').textContent = 'Comparativo de mercado em múltiplas plataformas.';
+  document.getElementById('ov-placeholder').style.display = 'none';
+  document.getElementById('ov-results').style.display = '';
+  document.getElementById('ov-proxy-warn').style.display = 'none';
+
+  renderMiniTrend();
+
+  // Try /platforms endpoint first (multi-platform)
+  let platData = null;
+  try {
+    const r = await fetch(`${PROXY}/platforms?q=${encodeURIComponent(query)}&limit=10`, { signal: AbortSignal.timeout(12000) });
+    if (r.ok) platData = await r.json();
+  } catch(e) {}
+
+  if (platData && platData.platforms) {
+    renderPlatformComparison(query, platData.platforms);
+  } else {
+    // Proxy offline
+    document.getElementById('ov-proxy-warn').style.display = '';
+    document.getElementById('ov-ml-products-wrap').style.display = 'none';
+    document.getElementById('ov-kpis').innerHTML = `
+      <div class="kpi"><div class="kpi-label">Índice ref.</div><div class="kpi-value">67</div><div class="kpi-sub amber">tênis masculino</div></div>
+      <div class="kpi"><div class="kpi-label">Média anual</div><div class="kpi-value">71</div><div class="kpi-sub">Google Trends ref.</div></div>
+      <div class="kpi"><div class="kpi-label">Pico do ano</div><div class="kpi-value">100</div><div class="kpi-sub green">Black Friday</div></div>
+    `;
+    document.getElementById('ov-insights').innerHTML = `
+      <div><div class="insight blue"><div class="insight-label">Proxy offline</div><p>Execute <strong>node ml-proxy.js</strong> no terminal para ativar dados reais de múltiplas plataformas.</p></div></div>
+      <div><div class="insight amber"><div class="insight-label">Plataformas disponíveis</div><p>Mercado Livre (API oficial) · Shopee BR · Google Trends · TikTok Shop (em breve)</p></div></div>`;
+    document.getElementById('ov-chart-badge').textContent = 'Dados de referência';
+  }
+
+  btn.disabled = false; btn.textContent = 'Analisar →';
+}
+
+function renderPlatformComparison(query, platforms) {
+  const ml = platforms.mercadolivre;
+  const sh = platforms.shopee;
+  const tt = platforms.tiktok_shop;
+  const am = platforms.amazon;
+
+  // Summary KPIs (best across platforms)
+  const allPrices = [];
+  if (ml && !ml.error) allPrices.push({ v: ml.price_avg, src: 'ML' });
+  if (sh && !sh.error) allPrices.push({ v: sh.price_avg, src: 'Shopee' });
+  const bestAvg = allPrices.length ? allPrices.reduce((a,b) => a.v < b.v ? a : b) : null;
+  const totalResults = (ml?.total||0) + (sh?.total||0);
+
+  document.getElementById('ov-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Anúncios totais</div><div class="kpi-value">${totalResults.toLocaleString('pt-BR')}</div><div class="kpi-sub">ML + Shopee combinados</div></div>
+    ${ml && !ml.error ? `<div class="kpi"><div class="kpi-label">Preço médio ML</div><div class="kpi-value">${fmt(ml.price_avg)}</div><div class="kpi-sub">top 10 mais vendidos</div></div>` : ''}
+    ${sh && !sh.error ? `<div class="kpi"><div class="kpi-label">Preço médio Shopee</div><div class="kpi-value">${fmt(sh.price_avg)}</div><div class="kpi-sub">top 10 resultados</div></div>` : ''}
+    ${bestAvg ? `<div class="kpi"><div class="kpi-label">Menor preço médio</div><div class="kpi-value">${fmt(bestAvg.v)}</div><div class="kpi-sub green">${bestAvg.src}</div></div>` : ''}
+  `;
+
+  // Platform cards
+  const maxAvg = Math.max(ml?.price_avg||0, sh?.price_avg||0) || 1;
+  const platCards = [
+    { key: 'ml',  data: ml, color: '#dc2626' },
+    { key: 'sh',  data: sh, color: '#ea580c' },
+    { key: 'tt',  data: tt, color: '#7c3aed' },
+    { key: 'am',  data: am, color: '#f59e0b' },
+  ];
+
+  const cardsHtml = platCards.map(({ data, color }) => {
+    if (!data) return '';
+    if (data.requires_credentials) {
+      return `<div class="platform-card offline" style="--pc:${color}">
+        <div class="platform-name">${data.name} <span class="platform-badge-off">Em breve</span></div>
+        <div class="platform-kpi" style="font-size:14px;color:#94a3b8">Requer credenciais</div>
+        <div class="platform-sub" style="font-size:11px;line-height:1.5">${data.info}</div>
+      </div>`;
+    }
+    if (data.error) {
+      return `<div class="platform-card offline" style="--pc:${color}">
+        <div class="platform-name">${data.name} <span class="platform-badge-warn">Indisponível</span></div>
+        <div class="platform-sub">${data.error}</div>
+      </div>`;
+    }
+    const barW = Math.round((data.price_avg / maxAvg) * 100);
+    return `<div class="platform-card" style="--pc:${color}">
+      <div class="platform-name">${data.name} <span class="platform-badge-ok">Ao vivo</span></div>
+      <div class="platform-kpi">${fmt(data.price_avg)}</div>
+      <div class="platform-sub">Preço médio · top ${data.count}</div>
+      <div class="platform-row">Total de anúncios <span>${(data.total||0).toLocaleString('pt-BR')}</span></div>
+      <div class="platform-row">Menor preço <span>${fmt(data.price_min)}</span></div>
+      <div class="platform-row">Maior preço <span>${fmt(data.price_max)}</span></div>
+      <div class="platform-row">Vendas acum. <span>${(data.sold_total||0).toLocaleString('pt-BR')}</span></div>
+      <div class="price-bar-wrap">
+        <div class="price-bar-label"><span>Preço relativo</span><span>${fmt(data.price_avg)}</span></div>
+        <div class="price-bar-track"><div class="price-bar-fill" style="width:${barW}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Remove old platform section if exists and inject
+  let platSection = document.getElementById('ov-plat-section');
+  if (!platSection) {
+    platSection = document.createElement('div');
+    platSection.id = 'ov-plat-section';
+    document.getElementById('ov-kpis').after(platSection);
+  }
+  platSection.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <span class="card-title">Comparativo de plataformas — "${query}"</span>
+        <span class="card-badge">Tempo real</span>
+      </div>
+      <div class="platform-grid">${cardsHtml}</div>
+    </div>`;
+
+  // Top products combined
+  const allProds = [];
+  if (ml && ml.top3) ml.top3.forEach(p => allProds.push({ ...p, src: 'ML', srcColor: '#dc2626' }));
+  if (sh && sh.top3) sh.top3.forEach(p => allProds.push({ ...p, src: 'Shopee', srcColor: '#ea580c' }));
+
+  if (allProds.length) {
+    document.getElementById('ov-ml-products-wrap').style.display = '';
+    document.getElementById('ov-prod-title').textContent = `Top produtos — ${query}`;
+    document.getElementById('ov-prod-badge').textContent = 'ML + Shopee combinados';
+    document.getElementById('ov-prod-grid').innerHTML = allProds.map(p => {
+      const cond = p.condition === 'new' ? '<span class="prod-badge new">Novo</span>' : '<span class="prod-badge used">Usado</span>';
+      const sales = p.sold ? `<span class="prod-badge sales">🛒 ${Number(p.sold).toLocaleString('pt-BR')}</span>` : '';
+      const link = p.url ? `<a href="${p.url}" target="_blank" class="prod-link" rel="noopener">Ver na ${p.src} ↗</a>` : '';
+      const srcBadge = `<span style="font-size:10px;background:${p.srcColor}22;color:${p.srcColor};border-radius:10px;padding:2px 8px;font-weight:600">${p.src}</span>`;
+      return `<div class="prod-card">
+        <div class="prod-title">${p.title}</div>
+        <div class="prod-price">${fmt(p.price)}</div>
+        <div class="prod-meta">${srcBadge}${cond}${sales}</div>
+        ${link}
+      </div>`;
+    }).join('');
+  }
+
+  // Insights
+  const mlOk = ml && !ml.error, shOk = sh && !sh.error;
+  const cheaperPlatform = mlOk && shOk ? (ml.price_avg < sh.price_avg ? 'Mercado Livre' : 'Shopee') : (mlOk ? 'Mercado Livre' : 'Shopee');
+  const diffPct = mlOk && shOk && ml.price_avg && sh.price_avg ? Math.abs(Math.round((ml.price_avg - sh.price_avg) / Math.max(ml.price_avg, sh.price_avg) * 100)) : null;
+
+  document.getElementById('ov-insights').innerHTML = `
+    <div>
+      ${mlOk ? `<div class="insight green"><div class="insight-label">Mercado Livre</div><p>${(ml.total||0).toLocaleString('pt-BR')} anúncios · preço médio <strong>${fmt(ml.price_avg)}</strong> · ${ml.sold_total?.toLocaleString('pt-BR')||0} vendas (top 10).</p></div>` : ''}
+      ${shOk ? `<div class="insight amber"><div class="insight-label">Shopee</div><p>${(sh.total||0).toLocaleString('pt-BR')} anúncios · preço médio <strong>${fmt(sh.price_avg)}</strong> · ${sh.sold_total?.toLocaleString('pt-BR')||0} vendas (top 10).</p></div>` : ''}
+    </div>
+    <div>
+      ${diffPct !== null ? `<div class="insight blue"><div class="insight-label">Diferença de preço</div><p><strong>${cheaperPlatform}</strong> tem preço médio ${diffPct}% ${cheaperPlatform==='Mercado Livre'?'menor que a Shopee':'menor que o Mercado Livre'} para este produto.</p></div>` : ''}
+      <div class="insight green"><div class="insight-label">TikTok Shop + Amazon</div><p>Integração disponível após aprovação de credenciais nas respectivas plataformas.</p></div>
+    </div>`;
+
+  document.getElementById('ov-chart-badge').textContent = 'Referência histórica · tênis masc.';
+}
+
+function renderMiniTrend() {
+  if (miniTrendChart) { miniTrendChart.destroy(); miniTrendChart = null; }
+  // will be initialized after trendData is declared below
+}
+
+// ---- REAL DATA from Google Trends ----
+const trendData = [
+  {d:"8/jun",v:72},{d:"15/jun",v:61},{d:"22/jun",v:58},{d:"29/jun",v:69},
+  {d:"6/jul",v:70},{d:"13/jul",v:75},{d:"20/jul",v:67},{d:"27/jul",v:73},
+  {d:"3/ago",v:96},{d:"10/ago",v:76},{d:"17/ago",v:66},{d:"24/ago",v:66},
+  {d:"31/ago",v:73},{d:"7/set",v:71},{d:"14/set",v:70},{d:"21/set",v:61},
+  {d:"28/set",v:67},{d:"5/out",v:68},{d:"12/out",v:69},{d:"19/out",v:63},
+  {d:"26/out",v:69},{d:"2/nov",v:76},{d:"9/nov",v:88},{d:"16/nov",v:86},
+  {d:"23/nov",v:100},{d:"30/nov",v:90},{d:"7/dez",v:90},{d:"14/dez",v:88},
+  {d:"21/dez",v:73},{d:"28/dez",v:54},{d:"4/jan",v:61},{d:"11/jan",v:61},
+  {d:"18/jan",v:63},{d:"25/jan",v:65},{d:"1/fev",v:78},{d:"8/fev",v:64},
+  {d:"15/fev",v:57},{d:"22/fev",v:57},{d:"1/mar",v:68},{d:"8/mar",v:63},
+  {d:"15/mar",v:63},{d:"22/mar",v:58},{d:"29/mar",v:65},{d:"5/abr",v:64},
+  {d:"12/abr",v:63},{d:"19/abr",v:63},{d:"26/abr",v:57},{d:"3/mai",v:67},
+  {d:"10/mai",v:67},{d:"17/mai",v:65},{d:"24/mai",v:66},{d:"31/mai",v:65},
+  {d:"7/jun",v:67}
+];
+
+// Monthly averages
+const monthMap = {
+  jun:[], jul:[], ago:[], set:[], out:[], nov:[], dez:[], jan:[], fev:[], mar:[], abr:[], mai:[]
+};
+trendData.forEach(p => {
+  const m = p.d.split('/')[1];
+  if (monthMap[m]) monthMap[m].push(p.v);
+});
+const monthAvg = Object.entries(monthMap).map(([m, vals]) => ({
+  m, avg: vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0
+}));
+
+function getColor(v) {
+  if (v >= 85) return '#15803d';
+  if (v >= 75) return '#16a34a';
+  if (v >= 68) return '#4ade80';
+  if (v >= 60) return '#fbbf24';
+  return '#f87171';
+}
+function getTextColor(v) {
+  if (v >= 75) return '#fff';
+  if (v >= 60) return '#78350f';
+  return '#fff';
+}
+
+// Mini trend (last 12 weeks) — rendered on demand via renderMiniTrend()
+const last12 = trendData.slice(-12);
+function renderMiniTrend() {
+  if (miniTrendChart) { miniTrendChart.destroy(); miniTrendChart = null; }
+  const canvas = document.getElementById('miniTrend');
+  if (!canvas) return;
+  miniTrendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: last12.map(p => p.d),
+      datasets: [{
+        data: last12.map(p => p.v),
+        borderColor: '#111',
+        backgroundColor: 'rgba(17,17,17,0.05)',
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: last12.map(p => p.v >= 80 ? '#16a34a' : p.v <= 60 ? '#dc2626' : '#111'),
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 40, max: 110, ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// Full trend
+new Chart(document.getElementById('fullTrend'), {
+  type: 'line',
+  data: {
+    labels: trendData.map(p => p.d),
+    datasets: [{
+      data: trendData.map(p => p.v),
+      borderColor: '#111',
+      backgroundColor: 'rgba(17,17,17,0.04)',
+      borderWidth: 1.5,
+      pointRadius: 2,
+      fill: true,
+      tension: 0.3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      annotation: {},
+      tooltip: { callbacks: { title: (i) => i[0].label, label: (i) => 'Índice: ' + i.raw } }
+    },
+    scales: {
+      y: { min: 40, max: 110, ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 18 }, grid: { display: false } }
+    }
+  }
+});
+
+// Monthly chart
+const monthLabels = ['Jun','Jul','Ago','Set','Out','Nov','Dez','Jan','Fev','Mar','Abr','Mai'];
+const monthVals = monthAvg.map(m => m.avg);
+new Chart(document.getElementById('monthChart'), {
+  type: 'bar',
+  data: {
+    labels: monthLabels,
+    datasets: [{
+      data: monthVals,
+      backgroundColor: monthVals.map(v => getColor(v)),
+      borderRadius: 6,
+      borderSkipped: false
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { min: 40, max: 110, ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 12 } }, grid: { display: false } }
+    }
+  }
+});
+
+// Heatmap
+const heatmap = document.getElementById('heatmap');
+monthLabels.forEach((m, i) => {
+  const v = monthVals[i];
+  const div = document.createElement('div');
+  div.className = 'month-cell';
+  div.style.background = getColor(v);
+  div.innerHTML = `<div class="month-name" style="color:rgba(255,255,255,0.8)">${m}</div><div class="month-val" style="color:#fff">${v}</div>`;
+  heatmap.appendChild(div);
+});
+
+// Platform volume
+new Chart(document.getElementById('volChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Google','ML','TikTok','Shopee'],
+    datasets: [{ data: [246,178,135,93], backgroundColor: ['#1d4ed8','#dc2626','#7c3aed','#ea580c'], borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: v => v+'K', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 12 } }, grid: { display: false } }
+    }
+  }
+});
+
+// CPC
+new Chart(document.getElementById('cpcChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Google','ML Ads','TikTok','Shopee'],
+    datasets: [{ data: [2.5,1.35,0.6,0.5], backgroundColor: ['#1d4ed8','#dc2626','#7c3aed','#ea580c'], borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: v => 'R$'+v.toFixed(2), font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 12 } }, grid: { display: false } }
+    }
+  }
+});
+
+// Volume & CPC charts (plataformas)
+new Chart(document.getElementById('volChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Google','Mercado Livre','TikTok','Shopee','Amazon'],
+    datasets: [{ data: [246000, 178000, 135000, 93000, 210000],
+      backgroundColor: ['#1d4ed8','#dc2626','#7c3aed','#ea580c','#f59e0b'],
+      borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: v => (v/1000)+'K', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+
+new Chart(document.getElementById('cpcChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Google','ML Ads','TikTok','Shopee','Amazon'],
+    datasets: [{ data: [2.5, 1.35, 0.6, 0.5, 1.75],
+      backgroundColor: ['#1d4ed8','#dc2626','#7c3aed','#ea580c','#f59e0b'],
+      borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: v => 'R$'+v.toFixed(2), font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+
+// Plataformas tab charts
+new Chart(document.getElementById('volChart2'), {
+  type: 'bar',
+  data: {
+    labels: ['Google','Mercado Livre','TikTok','Shopee','Amazon'],
+    datasets: [{ data: [246000, 178000, 135000, 93000, 210000],
+      backgroundColor: ['#1d4ed8','#dc2626','#7c3aed','#ea580c','#f59e0b'],
+      borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: v => (v/1000)+'K', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+new Chart(document.getElementById('cpcChart2'), {
+  type: 'bar',
+  data: {
+    labels: ['Google','ML Ads','TikTok','Shopee','Amazon'],
+    datasets: [{ data: [2.5, 1.35, 0.6, 0.5, 1.75],
+      backgroundColor: ['#1d4ed8','#dc2626','#7c3aed','#ea580c','#f59e0b'],
+      borderRadius: 6, borderSkipped: false }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: v => 'R$'+v.toFixed(2), font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'mercadolivre' && !window._mlLoaded) initML();
+}
+
+// ---- MERCADO LIVRE API INTEGRATION ----
+const PROXY = 'http://localhost:3001';
+let mlCondChart = null;
+let mlProxyOnline = false;
+
+function fmt(n) {
+  return 'R$ ' + Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function setStatus(type, html) {
+  const bar = document.getElementById('ml-status');
+  const dot = bar.querySelector('.ml-dot');
+  const txt = document.getElementById('ml-status-text');
+  bar.className = 'ml-status-bar ' + type;
+  dot.className = 'ml-dot ' + (type === 'connected' ? 'green' : type === 'disconnected' ? 'amber' : 'gray');
+  txt.innerHTML = html;
+}
+
+function mlSetTag(el, query) {
+  document.querySelectorAll('.ml-tag').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('ml-search-input').value = query;
+  if (mlProxyOnline) mlSearch();
+}
+
+async function mlSearch() {
+  const query = document.getElementById('ml-search-input').value.trim();
+  if (!query) return;
+  // sync tag highlight
+  document.querySelectorAll('.ml-tag').forEach(t => {
+    t.classList.toggle('active', t.getAttribute('onclick').includes(`'${query}'`));
+  });
+  const btn = document.getElementById('ml-search-btn');
+  btn.disabled = true;
+  btn.textContent = 'Buscando…';
+  setStatus('loading', `Buscando "<strong>${query}</strong>" no Mercado Livre…`);
+  try {
+    await loadMLData(query);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Pesquisar';
+  }
+}
+
+async function initML() {
+  setStatus('loading', 'Verificando conexão com o proxy local…');
+  try {
+    const ping = await fetch(PROXY + '/status', { signal: AbortSignal.timeout(3000) });
+    if (!ping.ok) throw new Error('proxy offline');
+    mlProxyOnline = true;
+    setStatus('connected', '✅  Proxy conectado — carregando dados…');
+    const q = document.getElementById('ml-search-input').value.trim() || 'tênis masculino';
+    await loadMLData(q);
+  } catch (e) {
+    mlProxyOnline = false;
+    setStatus('disconnected', '⚠️  Proxy offline — execute <strong>node ml-proxy.js</strong> no terminal para ativar dados reais');
+    document.getElementById('ml-setup').style.display = '';
+    document.getElementById('ml-live').style.display = 'none';
+  }
+}
+
+async function loadMLData(query) {
+  window._mlLoaded = true;
+  const q = encodeURIComponent(query);
+  const [searchData, trendsData] = await Promise.allSettled([
+    fetch(`${PROXY}/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json()),
+    fetch(PROXY + '/trends').then(r => r.json())
+  ]);
+
+  document.getElementById('ml-setup').style.display = 'none';
+  document.getElementById('ml-live').style.display = '';
+
+  if (searchData.status === 'fulfilled' && searchData.value.results) {
+    const results = searchData.value.results;
+    const paging = searchData.value.paging || {};
+
+    const prices = results.map(p => p.price).filter(Boolean);
+    const avgPrice = prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : 0;
+    const minPrice = prices.length ? Math.min(...prices) : 0;
+    const maxPrice = prices.length ? Math.max(...prices) : 0;
+    const totalSold = results.reduce((s,p) => s + (p.sold_quantity || 0), 0);
+
+    document.getElementById('ml-kpis').innerHTML = `
+      <div class="kpi"><div class="kpi-label">Total resultados</div><div class="kpi-value">${(paging.total||0).toLocaleString('pt-BR')}</div><div class="kpi-sub">"${query}" no ML</div></div>
+      <div class="kpi"><div class="kpi-label">Preço médio (top 20)</div><div class="kpi-value">${fmt(avgPrice)}</div><div class="kpi-sub">mais vendidos</div></div>
+      <div class="kpi"><div class="kpi-label">Faixa de preço</div><div class="kpi-value">${fmt(minPrice)}</div><div class="kpi-sub">a ${fmt(maxPrice)}</div></div>
+      <div class="kpi"><div class="kpi-label">Vendas acum. (top 20)</div><div class="kpi-value">${totalSold.toLocaleString('pt-BR')}</div><div class="kpi-sub green">unidades</div></div>
+    `;
+
+    document.getElementById('ml-products-title').textContent = `Top produtos — ${query}`;
+    document.getElementById('ml-products-badge').textContent = `${results.length} produtos · ordem: mais vendidos`;
+
+    document.getElementById('ml-products').innerHTML = results.map(p => {
+      const cond = p.condition === 'new' ? '<span class="prod-badge new">Novo</span>' : '<span class="prod-badge used">Usado</span>';
+      const sales = p.sold_quantity ? `<span class="prod-badge sales">🛒 ${p.sold_quantity.toLocaleString('pt-BR')} vendidos</span>` : '';
+      const seller = p.seller ? `<div class="prod-seller">Vendedor: ${p.seller.nickname || '—'}</div>` : '';
+      const link = p.permalink ? `<a href="${p.permalink}" target="_blank" class="prod-link" rel="noopener">Ver no Mercado Livre ↗</a>` : '';
+      return `<div class="prod-card">
+          <div class="prod-title">${p.title}</div>
+          <div class="prod-price">${fmt(p.price)}</div>
+          <div class="prod-meta">${cond}${sales}</div>
+          ${seller}${link}
+        </div>`;
+    }).join('');
+
+    const newCount = results.filter(p => p.condition === 'new').length;
+    const usedCount = results.length - newCount;
+    if (mlCondChart) mlCondChart.destroy();
+    mlCondChart = new Chart(document.getElementById('mlCondChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Novo', 'Usado'],
+        datasets: [{ data: [newCount, usedCount], backgroundColor: ['#3b82f6','#8b5cf6'], borderWidth: 0 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'right', labels: { font: { size: 13 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/results.length*100)}%)` } }
+        }
+      }
+    });
+
+    setStatus('connected', `✅  "${query}" — ${results.length} produtos carregados · ${(paging.total||0).toLocaleString('pt-BR')} resultados totais`);
+  } else {
+    setStatus('disconnected', '⚠️  Erro ao buscar dados. Verifique se o proxy está rodando.');
+  }
+
+  if (trendsData.status === 'fulfilled') {
+    const arr = Array.isArray(trendsData.value) ? trendsData.value : (trendsData.value.content || []);
+    const list = document.getElementById('ml-trends');
+    list.innerHTML = arr.length
+      ? arr.slice(0, 30).map(t => `<li class="trend-item">${(t.keyword||t.q||t).toString()}</li>`).join('')
+      : '<li style="font-size:13px;color:#888">Sem dados de trends disponíveis.</li>';
+  }
+}
+
+// Auto-check when page loads (silent, no flicker on other tabs)
+window.addEventListener('load', () => {
+  fetch(PROXY + '/status', { signal: AbortSignal.timeout(1500) })
+    .then(r => r.ok && r.json())
+    .then(d => { if (d && d.status === 'ok') {
+      document.getElementById('tab-ml').innerHTML = 'Mercado Livre API <span style="background:#16a34a;color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:600">● LIVE</span>';
+    }}).catch(()=>{});
+});
+</script>
+</body>
+</html>
