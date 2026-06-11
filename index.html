@@ -227,8 +227,8 @@ body.tag-editing #ov-add-wrap { display:flex !important; }
   <!-- Results (shown after search) -->
   <div id="ov-results" style="display:none">
     <div id="ov-proxy-warn" class="insight amber" style="display:none;margin-bottom:16px">
-      <div class="insight-label">Proxy offline</div>
-      <p>Para ver dados reais do Mercado Livre, execute <strong>node ml-proxy.js</strong> no terminal. Os KPIs abaixo são estimativas baseadas nos dados de referência.</p>
+      <div class="insight-label">API indisponível</div>
+      <p>Não foi possível conectar ao servidor de dados. Os KPIs abaixo são de referência.</p>
     </div>
 
     <div class="kpis" id="ov-kpis"></div>
@@ -670,25 +670,14 @@ body.tag-editing #ov-add-wrap { display:flex !important; }
 
   <div id="ml-status" class="ml-status-bar loading">
     <div class="ml-dot gray"></div>
-    <span id="ml-status-text">Verificando conexão com o proxy local…</span>
+    <span id="ml-status-text">Conectando à API…</span>Conectando à API…
   </div>
 
   <!-- Setup instructions (shown when proxy offline) -->
   <div id="ml-setup" class="card" style="display:none">
-    <div class="card-header"><span class="card-title">Como ativar dados reais</span></div>
-    <p style="font-size:13px;color:#555;margin-bottom:16px">O proxy Node.js precisa estar rodando localmente para buscar dados da API do Mercado Livre (necessário por restrições de CORS da API oficial).</p>
-    <div class="setup-box">
-      <div class="comment"># 1. Abra um terminal (CMD ou PowerShell)</div>
-      <div class="comment"># 2. Execute o comando abaixo (caminho completo do arquivo):</div>
-      <div>&nbsp;</div>
-      <div><span class="cmd">node</span> <span class="highlight">"C:\Users\felip\AppData\Roaming\Claude\...\outputs\ml-proxy.js"</span></div>
-      <div>&nbsp;</div>
-      <div class="comment"># Você deve ver:</div>
-      <div class="comment"># ✅ ML Market Intelligence Proxy rodando em http://localhost:3001</div>
-      <div>&nbsp;</div>
-      <div class="comment"># 3. Volte a este painel e clique em "Tentar novamente"</div>
-    </div>
-    <button onclick="initML()" style="margin-top:14px;padding:8px 20px;background:#111;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500">↻ Tentar novamente</button>
+    <div class="card-header"><span class="card-title">API indisponível</span></div>
+    <p style="font-size:13px;color:#555;margin-bottom:16px">Não foi possível conectar ao servidor de dados. Aguarde alguns instantes e tente novamente.</p>
+    <button onclick="initML()" style="background:#1e40af;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px">↻ Tentar novamente</button>
   </div>
 
   <!-- Live data sections (shown when proxy online) -->
@@ -831,12 +820,12 @@ async function ovSearch() {
     document.getElementById('ov-proxy-warn').style.display = '';
     document.getElementById('ov-ml-products-wrap').style.display = 'none';
     document.getElementById('ov-kpis').innerHTML = `
-      <div class="kpi"><div class="kpi-label">Índice ref.</div><div class="kpi-value">67</div><div class="kpi-sub amber">tênis masculino</div></div>
+      <div class="kpi"><div class="kpi-label">Índice ref.</div><div class="kpi-value">67</div><div class="kpi-sub amber">${query}</div></div>
       <div class="kpi"><div class="kpi-label">Média anual</div><div class="kpi-value">71</div><div class="kpi-sub">Google Trends ref.</div></div>
       <div class="kpi"><div class="kpi-label">Pico do ano</div><div class="kpi-value">100</div><div class="kpi-sub green">Black Friday</div></div>
     `;
     document.getElementById('ov-insights').innerHTML = `
-      <div><div class="insight blue"><div class="insight-label">Proxy offline</div><p>Execute <strong>node ml-proxy.js</strong> no terminal para ativar dados reais de múltiplas plataformas.</p></div></div>
+      <div><div class="insight blue"><div class="insight-label">Dados de referência</div><p>Conectando à API. Os valores acima são estimativas sazonais de referência para o produto pesquisado.</p></div></div>
       <div><div class="insight amber"><div class="insight-label">Plataformas disponíveis</div><p>Mercado Livre (API oficial) · Shopee BR · Google Trends · TikTok Shop (em breve)</p></div></div>`;
     document.getElementById('ov-chart-badge').textContent = 'Dados de referência';
   }
@@ -1221,7 +1210,7 @@ function showPage(id, btn) {
 }
 
 // ---- MERCADO LIVRE API INTEGRATION ----
-const PROXY = 'http://localhost:3001';
+const PROXY = '/api/api/api';
 let mlCondChart = null;
 let mlProxyOnline = false;
 
@@ -1270,7 +1259,7 @@ async function initML() {
     const ping = await fetch(PROXY + '/status', { signal: AbortSignal.timeout(3000) });
     if (!ping.ok) throw new Error('proxy offline');
     mlProxyOnline = true;
-    setStatus('connected', '✅  Proxy conectado — carregando dados…');
+    setStatus('connected', '✅  API conectada — carregando dados…');
     const q = document.getElementById('ml-search-input').value.trim() || 'tênis masculino';
     await loadMLData(q);
   } catch (e) {
@@ -1345,7 +1334,7 @@ async function loadMLData(query) {
 
     setStatus('connected', `✅  "${query}" — ${results.length} produtos carregados · ${(paging.total||0).toLocaleString('pt-BR')} resultados totais`);
   } else {
-    setStatus('disconnected', '⚠️  Erro ao buscar dados. Verifique se o proxy está rodando.');
+    setStatus('disconnected', '⚠️  Erro ao buscar dados. Tente novamente em instantes.');
   }
 
   if (trendsData.status === 'fulfilled') {
