@@ -80,48 +80,43 @@ async function getMlToken() {
 }
 
 async function mlScrapeSearch(q, limit) {
-  const slug = q.trim().replace(/\s+/g,'-').toLowerCase();
+  const slug = q.trim().replace(/\s+/g,'-').toLowerCase().replace(/[^a-z0-9-]/g,'');
   const r = await httpsGetHtml({
     hostname:'lista.mercadolivre.com.br', path:`/${slug}`, method:'GET',
-    headers:{'User-Agent':BROWSER_HEADERS['User-Agent'],'Accept':'text/html','Accept-Language':'pt-BR,pt;q=0.9','Accept-Encoding':'identity'}
-  });
-  if(!r||r.status!==200) return null;
-  const nd = extractNextData(r.html);
-  if(nd){
-    const candidates=[
-      nd?.props?.pageProps?.initialState?.listings?.listingResult?.results,
-      nd?.props?.pageProps?.initialState?.searchResult?.results,
-      nd?.props?.pageProps?.results,
-      nd?.props?.pageProps?.dehydratedState?.queries?.[0]?.state?.data?.results,
-    ];
-    for(const arr of candidates){
-      if(!Array.isArray(arr)||arr.length===0)continue;
-      const results=arr.slice(0,limit).map(item=>({
-        id:item.id,title:item.title||item.name,
-        price:item.price?.regularAmount||item.price?.amount||item.price,
-        sold_quantity:item.soldQuantity||item.sold_quantity||0,
-        thumbnail:item.thumbnail||item.pictures?.[0]?.url,
-        permalink:item.permalink||`https://www.mercadolivre.com.br/p/${item.id}`,
-        condition:item.condition||'new',currency_id:'BRL',
-      }));
-      if(results.length>0)return{results,paging:{total:results.length,limit,offset:0},source:'scrape'};
+    headers:{
+      'User-Agent':BROWSER_HEADERS['User-Agent'],
+      'Accept':'text/html,application/xhtml+xml',
+      'Accept-Language':'pt-BR,pt;q=0.9',
+      'Accept-Encoding':'identity',
     }
+  });
+  if(!r||r.status!==200||!r.html) return null;
+  const html = r.html;
+  // Parse ML listing HTML (SSR, no __NEXT_DATA__)
+  const results = [];
+  // Split by product card wrappers
+  const blocks = html.split('<div class="ui-search-result__wrapper');
+  for(let i=1; i<blocks.length && results.length<limit; i++){
+    const b = blocks[i];
+    // Title and permalink from poly-component__title anchor
+    const tm = b.match(/href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*class="[^"]*poly-component__title[^"]*"[^>]*>([^<]+)/);
+    const tm2 = b.match(/class="[^"]*poly-component__title[^"]*"[^>]*href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*>([^<]+)/);
+    const permalink = tm?.[1] || tm2?.[1] || '';
+    const title = (tm?.[2] || tm2?.[2] || '').trim();
+    if(!title) continue;
+    // Price
+    const pm = b.match(/class="andes-money-amount__fraction"[^>]*>([\d.]+)<\/span>/);
+    const cm = b.match(/class="andes-money-amount__cents"[^>]*>([\d]+)<\/span>/);
+    const price = pm ? (parseFloat(pm[1].replace(/\./g,'')) + (cm ? parseFloat(cm[1])/100 : 0)) : null;
+    // Thumbnail
+    const im = b.match(/class="poly-component__picture"[^>]*src="([^"]+)"/);
+    const thumbnail = im?.[1] || '';
+    // Item ID from permalink
+    const idm = permalink.match(/MLB[\d]+/);
+    const id = idm?.[0] || `scrape-${i}`;
+    results.push({id, title, price, sold_quantity:0, thumbnail, permalink: permalink||'https://www.mercadolivre.com.br', condition:'new', currency_id:'BRL'});
   }
-  // Try JSON-LD fallback
-  const jlds=r.html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)||[];
-  for(const s of jlds){
-    try{
-      const d=JSON.parse(s.replace(/<script[^>]*>/,'').replace('<\/script>',''));
-      if(d['@type']==='ItemList'&&d.itemListElement){
-        const results=d.itemListElement.slice(0,limit).map((el,i)=>({
-          id:el.item?.['@id']||String(i),title:el.item?.name||'',
-          price:el.item?.offers?.price,sold_quantity:0,
-          thumbnail:el.item?.image,permalink:el.item?.url,condition:'new',currency_id:'BRL'
-        })).filter(r=>r.title);
-        if(results.length>0)return{results,paging:{total:results.length,limit,offset:0},source:'scrape-jsonld'};
-      }
-    }catch(e){}
-  }
+  if(results.length>0) return{results, paging:{total:results.length,limit,offset:0}, source:'scrape'};
   return null;
 }
 
