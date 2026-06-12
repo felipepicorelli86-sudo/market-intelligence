@@ -1,0 +1,9 @@
+{
+  "regions": ["gru1"],
+  "functions": {
+    "api/api/api/[...slug].js": {
+      "maxDuration": 30,
+      "memory": 512
+    }
+  }
+}
