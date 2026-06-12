@@ -263,6 +263,16 @@ module.exports = async (req, res) => {
       case '/status':
         result = { status: 'ok', version: '4.0-serverless', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
         break;
+      case '/debug-hl': {
+        const tok = await getMlToken();
+        const hlR = await httpsGet({hostname:'api.mercadolibre.com',path:'/highlights/MLB/category/MLB1430',method:'GET',headers:{Authorization:`Bearer ${tok}`}});
+        const sample = hlR.body&&hlR.body.content?hlR.body.content.slice(0,3):hlR.body;
+        const sampleIds = hlR.body&&hlR.body.content?hlR.body.content.slice(0,3).map(i=>i.id).join(','):'';
+        let itemsR={status:'skipped',body:{}};
+        if(sampleIds){itemsR=await httpsGet({hostname:'api.mercadolibre.com',path:`/items?ids=${sampleIds}&attributes=id,title,price`,method:'GET',headers:{Authorization:`Bearer ${tok}`}});}
+        result={hl_status:hlR.status,hl_sample:sample,items_status:itemsR.status,items_body:itemsR.body};
+        break;
+      }
       case '/search':
         result = await mlSearch(q, limit, req.query.sort || 'sold_quantity_desc');
         break;
