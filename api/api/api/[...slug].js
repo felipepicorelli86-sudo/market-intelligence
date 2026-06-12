@@ -1,10 +1,9 @@
-// api/[...slug].js — Market Intelligence Serverless API v4.1
-// Vercel Serverless adapter — todas as rotas do ml-proxy.js em produção
+// api/[...slug].js — Market Intelligence Serverless API v4.2
+// Vercel Serverless adapter — todas as rotas em produção
 
 const https  = require('https');
 const crypto = require('crypto');
 
-// Credenciais via Vercel Environment Variables (ou fallback hardcoded para dev)
 const GOOGLE_API_KEY   = process.env.GOOGLE_API_KEY   || 'AIzaSyATu2oEjkZCKdYsM_5vpbh3QH5-w6qRdzY';
 const GOOGLE_CSE_ID    = process.env.GOOGLE_CSE_ID    || 'd1c98e55988a1421c';
 const ML_CLIENT_ID     = process.env.ML_CLIENT_ID     || '6479487697668843';
@@ -12,13 +11,12 @@ const ML_CLIENT_SECRET = process.env.ML_CLIENT_SECRET || 'NITdkMVYDIrP7gbituIMxX
 const TIKTOK_APP_KEY    = process.env.TIKTOK_APP_KEY    || '';
 const TIKTOK_APP_SECRET = process.env.TIKTOK_APP_SECRET || '';
 
-// Cache de token ML (persiste em instâncias Lambda quentes)
 let mlToken  = null;
 let mlExpiry = 0;
 let tikTokAccessToken = process.env.TIKTOK_ACCESS_TOKEN || '';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────────────────
-function httpsGet(options, body = null) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function httpsGet(options, body = null, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, res => {
       let data = '';
@@ -28,27 +26,27 @@ function httpsGet(options, body = null) {
         catch { resolve({ status: res.statusCode, body: data }); }
       });
     });
-    req.on('error', reject);
-    req.setTimeout(9000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.on('error', resolve.bind(null, { status: 0, body: null }));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve({ status: 0, body: null }); });
     if (body) req.write(body);
     req.end();
   });
 }
 
-function httpsGetHtml(options) {
-  return new Promise((resolve, reject) => {
+function httpsGetHtml(options, timeoutMs = 10000) {
+  return new Promise((resolve) => {
     const req = https.request(options, res => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         const loc = res.headers.location;
         const u = new URL(loc.startsWith('http') ? loc : `https://${options.hostname}${loc}`);
-        return resolve(httpsGetHtml({ hostname: u.hostname, path: u.pathname + u.search, method: 'GET', headers: options.headers }));
+        return resolve(httpsGetHtml({ hostname: u.hostname, path: u.pathname + u.search, method: 'GET', headers: options.headers }, timeoutMs));
       }
       let data = '';
       res.on('data', d => data += d);
       res.on('end', () => resolve({ status: res.statusCode, html: data }));
     });
-    req.on('error', reject);
-    req.setTimeout(9000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.on('error', () => resolve({ status: 0, html: '' }));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve({ status: 0, html: '' }); });
     req.end();
   });
 }
@@ -66,7 +64,7 @@ function extractNextData(html) {
   try { return JSON.parse(m[1]); } catch { return null; }
 }
 
-// ── Mercado Livre ────────────────────────────────────────────────────────────────────────────
+// ── Mercado Livre ─────────────────────────────────────────────────────────────
 async function getMlToken() {
   if (mlToken && Date.now() < mlExpiry) return mlToken;
   const body = `grant_type=client_credentials&client_id=${ML_CLIENT_ID}&client_secret=${ML_CLIENT_SECRET}`;
@@ -74,12 +72,13 @@ async function getMlToken() {
     hostname: 'api.mercadolibre.com', path: '/oauth/token', method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
   }, body);
-  mlToken  = r.body.access_token;
-  mlExpiry = Date.now() + ((r.body.expires_in || 3600) - 300) * 1000;
+  if (r.body && r.body.access_token) {
+    mlToken  = r.body.access_token;
+    mlExpiry = Date.now() + ((r.body.expires_in || 3600) - 300) * 1000;
+  }
   return mlToken;
 }
 
-// Map search terms → ML category IDs (fallback when /search is blocked)
 const ML_CAT = {
   'tenis': 'MLB1430', 'tênis': 'MLB1430', 'sapato': 'MLB1430', 'calçado': 'MLB1430',
   'notebook': 'MLB1652', 'laptop': 'MLB1652',
@@ -95,9 +94,10 @@ function mlCategoryFor(q) {
   return match ? ML_CAT[match] : 'MLB1430';
 }
 
+// Highlights: get IDs → try batch only (individual fetches always fail with 403)
 async function mlHighlights(categoryId, limit) {
   const token = await getMlToken();
-  // Step 1: get highlighted item IDs for category
+  if (!token) return null;
   const hl = await httpsGet({
     hostname: 'api.mercadolibre.com',
     path: `/highlights/MLB/category/${categoryId}`,
@@ -106,29 +106,19 @@ async function mlHighlights(categoryId, limit) {
   if (hl.status !== 200 || !hl.body || !hl.body.content) return null;
   const ids = hl.body.content.slice(0, limit).map(i => i.id).filter(Boolean);
   if (!ids.length) return null;
-  // Step 2: try batch fetch first
   const batchR = await httpsGet({
     hostname: 'api.mercadolibre.com',
     path: `/items?ids=${ids.join(',')}&attributes=id,title,price,sold_quantity,thumbnail,permalink,condition,currency_id`,
     method: 'GET', headers: { Authorization: `Bearer ${token}` }
   });
   if (batchR.status === 200 && Array.isArray(batchR.body)) {
-    const results = batchR.body.filter(i => i.code === 200).map(i => i.body);
+    const results = batchR.body.filter(i => i.code === 200).map(i => i.body).filter(Boolean);
     if (results.length > 0) return { results, paging: { total: results.length, limit, offset: 0 }, source: 'highlights' };
   }
-  // Batch blocked — try individual fetches
-  const items = await Promise.all(ids.map(async id => {
-    const r1 = await httpsGet({ hostname: 'api.mercadolibre.com', path: `/items/${id}`, method: 'GET', headers: {} });
-    if (r1.status === 200 && r1.body && r1.body.id) return r1.body;
-    const r2 = await httpsGet({ hostname: 'api.mercadolibre.com', path: `/items/${id}`, method: 'GET', headers: { Authorization: `Bearer ${token}` } });
-    if (r2.status === 200 && r2.body && r2.body.id) return r2.body;
-    return null;
-  }));
-  const results = items.filter(Boolean);
-  if (!results.length) return null;
-  return { results, paging: { total: results.length, limit, offset: 0 }, source: 'highlights' };
+  return null;
 }
 
+// Scrape lista.mercadolivre.com.br HTML (server-rendered, no JS required)
 async function mlScrapeSearch(q, limit) {
   const slug = q.trim().replace(/\s+/g, '-').toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -143,7 +133,7 @@ async function mlScrapeSearch(q, limit) {
       'Accept-Language': 'pt-BR,pt;q=0.9',
       'Accept-Encoding': 'identity',
     }
-  });
+  }, 12000);
   if (!r || r.status !== 200 || !r.html) return null;
   const html = r.html;
   const results = [];
@@ -153,14 +143,14 @@ async function mlScrapeSearch(q, limit) {
     let permalink = '', title = '';
     const tm1 = b.match(/href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*class="[^"]*poly-component__title[^"]*"[^>]*>([^<]+)/);
     const tm2 = b.match(/class="[^"]*poly-component__title[^"]*"[^>]*href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*>([^<]+)/);
-    const tm3 = b.match(/<a[^>]+href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*>\s*<h2[^>]*class="[^"]*poly-box[^"]*"[^>]*>\s*([^<]+)/);
+    const tm3 = b.match(/<a[^>]+href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*>\s*<h2[^>]*>\s*([^<]+)/);
     if (tm1) { permalink = tm1[1]; title = tm1[2].trim(); }
     else if (tm2) { permalink = tm2[1]; title = tm2[2].trim(); }
     else if (tm3) { permalink = tm3[1]; title = tm3[2].trim(); }
     if (!title) continue;
     const pm = b.match(/class="andes-money-amount__fraction"[^>]*>([\d.,]+)<\/span>/);
     const cm = b.match(/class="andes-money-amount__cents"[^>]*>(\d+)<\/span>/);
-    const price = pm ? (parseFloat(pm[1].replace(/\./g, '').replace(',', '.')) + (cm ? parseFloat(cm[1]) / 100 : 0)) : null;
+    const price = pm ? (parseFloat(pm[1].replace(/\./g,'').replace(',','.')) + (cm ? parseFloat(cm[1])/100 : 0)) : null;
     const im2 = b.match(/data-src="(https:\/\/http[^"]+)"/);
     const im3 = b.match(/src="(https:\/\/http[^"]+)"/);
     const thumbnail = im2?.[1] || im3?.[1] || '';
@@ -173,29 +163,29 @@ async function mlScrapeSearch(q, limit) {
 }
 
 async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
-  // 1. Try anonymous search
+  // 1. Anonymous search (fast fail expected — 403 PolicyAgent)
   const rAnon = await httpsGet({
     hostname: 'api.mercadolibre.com',
     path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
     method: 'GET', headers: {}
   });
   if (rAnon.status === 200 && rAnon.body && rAnon.body.results && rAnon.body.results.length > 0) return rAnon.body;
-  // 2. Try authenticated search
+  // 2. Authenticated search (fast fail expected — 403 PolicyAgent)
   const token = await getMlToken();
-  const r = await httpsGet({
-    hostname: 'api.mercadolibre.com',
-    path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
-    method: 'GET', headers: { Authorization: `Bearer ${token}` }
-  });
-  if (r.status === 200 && r.body && r.body.results && r.body.results.length > 0) return r.body;
-  // 3. Fallback: highlights by category
-  const catId = mlCategoryFor(q);
-  const hlResult = await mlHighlights(catId, limit);
+  if (token) {
+    const r = await httpsGet({
+      hostname: 'api.mercadolibre.com',
+      path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
+      method: 'GET', headers: { Authorization: `Bearer ${token}` }
+    });
+    if (r.status === 200 && r.body && r.body.results && r.body.results.length > 0) return r.body;
+  }
+  // 3. Highlights by category (IDs work, items batch fails fast)
+  const hlResult = await mlHighlights(mlCategoryFor(q), limit);
   if (hlResult && hlResult.results && hlResult.results.length > 0) return hlResult;
-  // 4. Last resort: scrape ML listing page
+  // 4. Scrape ML listing page (SSR HTML, no JS required)
   const sc = await mlScrapeSearch(q, limit);
   if (sc && sc.results && sc.results.length > 0) return sc;
-  // All failed
   return { results: [], paging: { total: 0, limit, offset: 0 }, source: 'unavailable' };
 }
 
@@ -203,12 +193,12 @@ async function mlTrends() {
   const token = await getMlToken();
   const r = await httpsGet({
     hostname: 'api.mercadolibre.com', path: '/trends/MLB', method: 'GET',
-    headers: { Authorization: `Bearer ${token}` }
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
   });
   return r.body;
 }
 
-// ── Shopee Brasil ───────────────────────────────────────────────────────────────────────────────
+// ── Shopee Brasil ─────────────────────────────────────────────────────────────
 async function shopeeSearch(q, limit = 10) {
   const qs = `keyword=${encodeURIComponent(q)}&limit=${limit}&newest=0&by=relevancy&order=desc&page_type=search&scenario=PAGE_GLOBAL_SEARCH&version=2`;
   const r = await httpsGet({
@@ -224,13 +214,10 @@ async function shopeeSearch(q, limit = 10) {
   return { platform: 'shopee', total: r.body.total_count || items.length, items };
 }
 
-// ── Google Trends ─────────────────────────────────────────────────────────────────────────────
+// ── Google Trends ─────────────────────────────────────────────────────────────
 async function googleTrends(q) {
   const path = `/trends/api/explore?hl=pt-BR&tz=-180&req=%7B%22comparisonItem%22%3A%5B%7B%22keyword%22%3A%22${encodeURIComponent(q)}%22%2C%22geo%22%3A%22BR%22%2C%22time%22%3A%22today+12-m%22%7D%5D%2C%22category%22%3A0%2C%22property%22%3A%22%22%7D`;
-  const r = await httpsGet({
-    hostname: 'trends.google.com', path, method: 'GET',
-    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'pt-BR,pt;q=0.9' }
-  });
+  const r = await httpsGet({ hostname: 'trends.google.com', path, method: 'GET', headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'pt-BR,pt;q=0.9' } }, null, 8000);
   let raw = typeof r.body === 'string' ? r.body : JSON.stringify(r.body);
   raw = raw.replace(/^\)\]\}',?\n?/, '');
   try {
@@ -240,7 +227,7 @@ async function googleTrends(q) {
   } catch { return { error: 'Google Trends indisponível' }; }
 }
 
-// ── Buscapé ─────────────────────────────────────────────────────────────────────────────────────
+// ── Buscapé ───────────────────────────────────────────────────────────────────
 async function buscapeSearch(q, limit = 10) {
   const r = await httpsGetHtml({ hostname: 'www.buscape.com.br', path: `/pesquisa?q=${encodeURIComponent(q)}`, method: 'GET', headers: { ...BROWSER_HEADERS, Referer: 'https://www.buscape.com.br/' } });
   const next = extractNextData(r.html);
@@ -253,7 +240,7 @@ async function buscapeSearch(q, limit = 10) {
   return { platform: 'buscape', total: raw.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── Zoom.com.br ───────────────────────────────────────────────────────────────────────────────────
+// ── Zoom.com.br ───────────────────────────────────────────────────────────────
 async function zoomSearch(q, limit = 10) {
   const r = await httpsGetHtml({ hostname: 'www.zoom.com.br', path: `/search?q=${encodeURIComponent(q)}`, method: 'GET', headers: { ...BROWSER_HEADERS, Referer: 'https://www.zoom.com.br/' } });
   const next = extractNextData(r.html);
@@ -266,18 +253,18 @@ async function zoomSearch(q, limit = 10) {
   return { platform: 'zoom', total: raw.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── Google Shopping ─────────────────────────────────────────────────────────────────────────────
+// ── Google Shopping ───────────────────────────────────────────────────────────
 async function googleShoppingSearch(q, limit = 10) {
   if (!GOOGLE_API_KEY) return { error: 'Google Shopping não configurado' };
   const qs = `key=${GOOGLE_API_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(q)}&num=${Math.min(limit,10)}&gl=br&hl=pt`;
-  const r = await httpsGet({ hostname: 'www.googleapis.com', path: `/customsearch/v1?${qs}`, method: 'GET', headers: { Accept: 'application/json' } });
+  const r = await httpsGet({ hostname: 'www.googleapis.com', path: `/customsearch/v1?${qs}`, method: 'GET', headers: { Accept: 'application/json' } }, null, 8000);
   if (r.status !== 200) return { error: `Google API: HTTP ${r.status}` };
   const items = (r.body.items || []).map(i => ({ title: i.title, price: i.pagemap?.offer?.[0]?.price ? parseFloat(i.pagemap.offer[0].price.replace(/[^0-9,.]/g,'').replace(',','.')) : null, url: i.link, seller: i.displayLink, condition: 'new' }));
   const prices = items.map(i => i.price).filter(Boolean);
   return { platform: 'google_shopping', total: r.body.searchInformation?.totalResults || items.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── TikTok Shop ───────────────────────────────────────────────────────────────────────────────────
+// ── TikTok Shop ───────────────────────────────────────────────────────────────
 function tikTokSign(path, params, bodyStr = '') {
   const sorted = Object.keys(params).filter(k => k !== 'sign' && k !== 'access_token').sort().map(k => `${k}${params[k]}`).join('');
   return crypto.createHmac('sha256', TIKTOK_APP_SECRET).update(TIKTOK_APP_SECRET + path + sorted + bodyStr + TIKTOK_APP_SECRET).digest('hex').toUpperCase();
@@ -300,7 +287,7 @@ async function tikTokShopSearch(q, limit = 10) {
   return { platform: 'tiktok_shop', total: r.body?.data?.total_count || items.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── Agregador multi-plataforma ────────────────────────────────────────────────────────────────────────────────
+// ── Agregador multi-plataforma ────────────────────────────────────────────────
 async function platformsSearch(q, limit = 10) {
   const [ml, shopee, buscape, zoom, gshop, tiktok] = await Promise.allSettled([
     mlSearch(q, limit), shopeeSearch(q, limit), buscapeSearch(q, limit),
@@ -319,7 +306,7 @@ async function platformsSearch(q, limit = 10) {
   const result = { query: q, platforms: {} };
 
   result.platforms.mercadolivre = (() => {
-    if (ml.status === 'fulfilled' && ml.value.results) {
+    if (ml.status === 'fulfilled' && ml.value && ml.value.results) {
       const r = ml.value.results; const prices = r.map(p => p.price).filter(Boolean);
       return { name: 'Mercado Livre', color: '#dc2626', total: ml.value.paging?.total || 0, count: r.length, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : 0, price_min: prices.length ? Math.min(...prices) : 0, price_max: prices.length ? Math.max(...prices) : 0, sold_total: r.reduce((s,p) => s+(p.sold_quantity||0), 0), top3: r.slice(0,3).map(p => ({ title: p.title, price: p.price, sold: p.sold_quantity||0, url: p.permalink, condition: p.condition })) };
     }
@@ -327,7 +314,7 @@ async function platformsSearch(q, limit = 10) {
   })();
 
   result.platforms.shopee = (() => {
-    if (shopee.status === 'fulfilled' && shopee.value.items) {
+    if (shopee.status === 'fulfilled' && shopee.value && shopee.value.items) {
       const it = shopee.value.items; const prices = it.map(p => p.price).filter(Boolean);
       return { name: 'Shopee', color: '#ea580c', total: shopee.value.total || 0, count: it.length, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : 0, price_min: prices.length ? Math.min(...prices) : 0, price_max: prices.length ? Math.max(...prices) : 0, sold_total: it.reduce((s,p) => s+(p.sold||0), 0), top3: it.slice(0,3).map(p => ({ title: p.title, price: p.price, sold: p.sold||0, url: p.url, condition: 'new' })) };
     }
@@ -338,7 +325,7 @@ async function platformsSearch(q, limit = 10) {
   result.platforms.zoom      = normalizePlatform('Zoom.com.br',     '#0ea5e9', zoom);
   result.platforms.gshop     = normalizePlatform('Google Shopping', '#1d4ed8', gshop);
 
-  result.platforms.tiktok_shop = (tiktok.status === 'fulfilled' && tiktok.value.items)
+  result.platforms.tiktok_shop = (tiktok.status === 'fulfilled' && tiktok.value && tiktok.value.items)
     ? normalizePlatform('TikTok Shop', '#7c3aed', tiktok)
     : (tiktok.value?.requires_credentials ? tiktok.value : { name: 'TikTok Shop', color: '#7c3aed', requires_credentials: true, info: 'Requer aprovação como parceiro. Acesse: https://partner.tiktokshop.com' });
 
@@ -347,7 +334,7 @@ async function platformsSearch(q, limit = 10) {
   return result;
 }
 
-// ── Vercel Serverless Handler ─────────────────────────────────────────────────────────────────────────────
+// ── Vercel Serverless Handler ─────────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -363,7 +350,7 @@ module.exports = async (req, res) => {
     let result;
     switch (endpoint) {
       case '/status':
-        result = { status: 'ok', version: '4.1-scrape', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
+        result = { status: 'ok', version: '4.2-scrape', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
         break;
       case '/search':
         result = await mlSearch(q, limit, req.query.sort || 'sold_quantity_desc');
