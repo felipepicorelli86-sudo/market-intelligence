@@ -79,6 +79,52 @@ async function getMlToken() {
   return mlToken;
 }
 
+async function mlScrapeSearch(q, limit) {
+  const slug = q.trim().replace(/\s+/g,'-').toLowerCase();
+  const r = await httpsGetHtml({
+    hostname:'lista.mercadolivre.com.br', path:`/${slug}`, method:'GET',
+    headers:{'User-Agent':BROWSER_HEADERS['User-Agent'],'Accept':'text/html','Accept-Language':'pt-BR,pt;q=0.9','Accept-Encoding':'identity'}
+  });
+  if(!r||r.status!==200) return null;
+  const nd = extractNextData(r.html);
+  if(nd){
+    const candidates=[
+      nd?.props?.pageProps?.initialState?.listings?.listingResult?.results,
+      nd?.props?.pageProps?.initialState?.searchResult?.results,
+      nd?.props?.pageProps?.results,
+      nd?.props?.pageProps?.dehydratedState?.queries?.[0]?.state?.data?.results,
+    ];
+    for(const arr of candidates){
+      if(!Array.isArray(arr)||arr.length===0)continue;
+      const results=arr.slice(0,limit).map(item=>({
+        id:item.id,title:item.title||item.name,
+        price:item.price?.regularAmount||item.price?.amount||item.price,
+        sold_quantity:item.soldQuantity||item.sold_quantity||0,
+        thumbnail:item.thumbnail||item.pictures?.[0]?.url,
+        permalink:item.permalink||`https://www.mercadolivre.com.br/p/${item.id}`,
+        condition:item.condition||'new',currency_id:'BRL',
+      }));
+      if(results.length>0)return{results,paging:{total:results.length,limit,offset:0},source:'scrape'};
+    }
+  }
+  // Try JSON-LD fallback
+  const jlds=r.html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)||[];
+  for(const s of jlds){
+    try{
+      const d=JSON.parse(s.replace(/<script[^>]*>/,'').replace('<\/script>',''));
+      if(d['@type']==='ItemList'&&d.itemListElement){
+        const results=d.itemListElement.slice(0,limit).map((el,i)=>({
+          id:el.item?.['@id']||String(i),title:el.item?.name||'',
+          price:el.item?.offers?.price,sold_quantity:0,
+          thumbnail:el.item?.image,permalink:el.item?.url,condition:'new',currency_id:'BRL'
+        })).filter(r=>r.title);
+        if(results.length>0)return{results,paging:{total:results.length,limit,offset:0},source:'scrape-jsonld'};
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
 const ML_CAT={'tenis masculino':'MLB1430','tenis feminino':'MLB1432','tenis':'MLB1430','nike':'MLB1430','adidas':'MLB1430','mizuno':'MLB1430','notebook':'MLB1652','laptop':'MLB1652','celular':'MLB1051','smartphone':'MLB1051','iphone':'MLB1051','samsung':'MLB1051','mochila':'MLB3258','bolsa':'MLB3258','camiseta':'MLB12482','camisa':'MLB12482','corrida':'MLB260336','esporte':'MLB1276'};
 function mlCategoryFor(q){const ql=q.toLowerCase();const k=Object.keys(ML_CAT).find(k=>ql.includes(k));return k?ML_CAT[k]:'MLB1430';}
 async function mlHighlights(catId,limit){const token=await getMlToken();const hl=await httpsGet({hostname:'api.mercadolibre.com',path:`/highlights/MLB/category/${catId}`,method:'GET',headers:{Authorization:`Bearer ${token}`}});if(hl.status!==200||!hl.body||!hl.body.content)return null;const ids=hl.body.content.slice(0,limit).map(i=>i.id).join(',');if(!ids)return null;const ir=await httpsGet({hostname:'api.mercadolibre.com',path:`/items?ids=${ids}&attributes=id,title,price,sold_quantity,thumbnail,permalink,condition,currency_id`,method:'GET',headers:{Authorization:`Bearer ${token}`}});if(ir.status!==200||!Array.isArray(ir.body))return null;const results=ir.body.filter(i=>i.code===200).map(i=>i.body);return{results,paging:{total:results.length,limit,offset:0},source:'highlights'};}
@@ -92,6 +138,9 @@ async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
   if(r.status===200&&r.body&&r.body.results)return r.body;
   const hl=await mlHighlights(mlCategoryFor(q),limit);
   if(hl)return hl;
+  // Last resort: scrape ML listing page
+  const scrapeResult = await mlScrapeSearch(q, limit);
+  if(scrapeResult) return scrapeResult;
   return r.body;
 }
 async function mlTrends() {
@@ -263,19 +312,6 @@ module.exports = async (req, res) => {
       case '/status':
         result = { status: 'ok', version: '4.0-serverless', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
         break;
-      case '/debug-hl': {
-        const tok = await getMlToken();
-        const hlR = await httpsGet({hostname:'api.mercadolibre.com',path:'/highlights/MLB/category/MLB1430',method:'GET',headers:{Authorization:`Bearer ${tok}`}});
-        const ids = hlR.body&&hlR.body.content?hlR.body.content.slice(0,3).map(i=>i.id):[];
-        // Test item WITHOUT auth
-        let noAuthR={status:'skipped',body:{}};
-        if(ids[0]){noAuthR=await httpsGet({hostname:'api.mercadolibre.com',path:`/items/${ids[0]}?attributes=id,title,price`,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}});}
-        // Test item WITH auth
-        let authR={status:'skipped',body:{}};
-        if(ids[0]){authR=await httpsGet({hostname:'api.mercadolibre.com',path:`/items/${ids[0]}?attributes=id,title,price`,method:'GET',headers:{Authorization:`Bearer ${tok}`,'User-Agent':'Mozilla/5.0'}});}
-        result={ids,no_auth:{status:noAuthR.status,body:noAuthR.body},with_auth:{status:authR.status,body:authR.body}};
-        break;
-      }
       case '/search':
         result = await mlSearch(q, limit, req.query.sort || 'sold_quantity_desc');
         break;
