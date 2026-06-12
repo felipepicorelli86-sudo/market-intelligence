@@ -79,6 +79,9 @@ async function getMlToken() {
   return mlToken;
 }
 
+const ML_CAT={'tenis masculino':'MLB1430','tenis feminino':'MLB1432','tenis':'MLB1430','nike':'MLB1430','adidas':'MLB1430','mizuno':'MLB1430','notebook':'MLB1652','laptop':'MLB1652','celular':'MLB1051','smartphone':'MLB1051','iphone':'MLB1051','samsung':'MLB1051','mochila':'MLB3258','bolsa':'MLB3258','camiseta':'MLB12482','camisa':'MLB12482','corrida':'MLB260336','esporte':'MLB1276'};
+function mlCategoryFor(q){const ql=q.toLowerCase();const k=Object.keys(ML_CAT).find(k=>ql.includes(k));return k?ML_CAT[k]:'MLB1430';}
+async function mlHighlights(catId,limit){const token=await getMlToken();const hl=await httpsGet({hostname:'api.mercadolibre.com',path:`/highlights/MLB/category/${catId}`,method:'GET',headers:{Authorization:`Bearer ${token}`}});if(hl.status!==200||!hl.body||!hl.body.content)return null;const ids=hl.body.content.slice(0,limit).map(i=>i.id).join(',');if(!ids)return null;const ir=await httpsGet({hostname:'api.mercadolibre.com',path:`/items?ids=${ids}&attributes=id,title,price,sold_quantity,thumbnail,permalink,condition,currency_id`,method:'GET',headers:{Authorization:`Bearer ${token}`}});if(ir.status!==200||!Array.isArray(ir.body))return null;const results=ir.body.filter(i=>i.code===200).map(i=>i.body);return{results,paging:{total:results.length,limit,offset:0},source:'highlights'};}
 async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
   const token = await getMlToken();
   const r = await httpsGet({
@@ -86,9 +89,11 @@ async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
     path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
     method: 'GET', headers: { Authorization: `Bearer ${token}` }
   });
+  if(r.status===200&&r.body&&r.body.results)return r.body;
+  const hl=await mlHighlights(mlCategoryFor(q),limit);
+  if(hl)return hl;
   return r.body;
 }
-
 async function mlTrends() {
   const token = await getMlToken();
   const r = await httpsGet({
