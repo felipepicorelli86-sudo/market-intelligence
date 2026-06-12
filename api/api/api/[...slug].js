@@ -137,7 +137,7 @@ async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
   });
   if(r.status===200&&r.body&&r.body.results)return r.body;
   const hl=await mlHighlights(mlCategoryFor(q),limit);
-  if(hl)return hl;
+  if(hl&&hl.results&&hl.results.length>0)return hl;
   // Last resort: scrape ML listing page
   const scrapeResult = await mlScrapeSearch(q, limit);
   if(scrapeResult) return scrapeResult;
