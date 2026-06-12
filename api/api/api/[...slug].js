@@ -1,4 +1,4 @@
-// api/[...slug].js — Market Intelligence Serverless API v4.0
+// api/[...slug].js — Market Intelligence Serverless API v4.1
 // Vercel Serverless adapter — todas as rotas do ml-proxy.js em produção
 
 const https  = require('https');
@@ -17,7 +17,7 @@ let mlToken  = null;
 let mlExpiry = 0;
 let tikTokAccessToken = process.env.TIKTOK_ACCESS_TOKEN || '';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────────────────
 function httpsGet(options, body = null) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, res => {
@@ -66,7 +66,7 @@ function extractNextData(html) {
   try { return JSON.parse(m[1]); } catch { return null; }
 }
 
-// ── Mercado Livre ─────────────────────────────────────────────────────────────
+// ── Mercado Livre ────────────────────────────────────────────────────────────────────────────
 async function getMlToken() {
   if (mlToken && Date.now() < mlExpiry) return mlToken;
   const body = `grant_type=client_credentials&client_id=${ML_CLIENT_ID}&client_secret=${ML_CLIENT_SECRET}`;
@@ -79,90 +79,125 @@ async function getMlToken() {
   return mlToken;
 }
 
-async function mlScrapeSearch(q, limit) {
-  const slug = q.trim().replace(/\s+/g,'-').toLowerCase().replace(/[^a-z0-9-]/g,'');
-  const r = await httpsGetHtml({
-    hostname:'lista.mercadolivre.com.br', path:`/${slug}`, method:'GET',
-    headers:{
-      'User-Agent':BROWSER_HEADERS['User-Agent'],
-      'Accept':'text/html,application/xhtml+xml',
-      'Accept-Language':'pt-BR,pt;q=0.9',
-      'Accept-Encoding':'identity',
-    }
-  });
-  if(!r||r.status!==200||!r.html) return null;
-  const html = r.html;
-  // Parse ML listing HTML (SSR, no __NEXT_DATA__)
-  const results = [];
-  // Split by product card wrappers
-  const blocks = html.split('<div class="ui-search-result__wrapper');
-  for(let i=1; i<blocks.length && results.length<limit; i++){
-    const b = blocks[i];
-    // Title and permalink from poly-component__title anchor
-    const tm = b.match(/href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*class="[^"]*poly-component__title[^"]*"[^>]*>([^<]+)/);
-    const tm2 = b.match(/class="[^"]*poly-component__title[^"]*"[^>]*href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*>([^<]+)/);
-    const permalink = tm?.[1] || tm2?.[1] || '';
-    const title = (tm?.[2] || tm2?.[2] || '').trim();
-    if(!title) continue;
-    // Price
-    const pm = b.match(/class="andes-money-amount__fraction"[^>]*>([\d.]+)<\/span>/);
-    const cm = b.match(/class="andes-money-amount__cents"[^>]*>([\d]+)<\/span>/);
-    const price = pm ? (parseFloat(pm[1].replace(/\./g,'')) + (cm ? parseFloat(cm[1])/100 : 0)) : null;
-    // Thumbnail
-    const im = b.match(/class="poly-component__picture"[^>]*src="([^"]+)"/);
-    const thumbnail = im?.[1] || '';
-    // Item ID from permalink
-    const idm = permalink.match(/MLB[\d]+/);
-    const id = idm?.[0] || `scrape-${i}`;
-    results.push({id, title, price, sold_quantity:0, thumbnail, permalink: permalink||'https://www.mercadolivre.com.br', condition:'new', currency_id:'BRL'});
-  }
-  if(results.length>0) return{results, paging:{total:results.length,limit,offset:0}, source:'scrape'};
-  return null;
+// Map search terms → ML category IDs (fallback when /search is blocked)
+const ML_CAT = {
+  'tenis': 'MLB1430', 'tênis': 'MLB1430', 'sapato': 'MLB1430', 'calçado': 'MLB1430',
+  'notebook': 'MLB1652', 'laptop': 'MLB1652',
+  'celular': 'MLB1051', 'smartphone': 'MLB1051', 'iphone': 'MLB1051', 'samsung': 'MLB1051',
+  'mochila': 'MLB3258', 'bolsa': 'MLB3258',
+  'camiseta': 'MLB12482', 'camisa': 'MLB12482', 'roupa': 'MLB12482',
+  'corrida': 'MLB260336', 'esporte': 'MLB1276',
+  'adidas': 'MLB1430', 'nike': 'MLB1430', 'mizuno': 'MLB1430',
+};
+function mlCategoryFor(q) {
+  const ql = q.toLowerCase();
+  const match = Object.keys(ML_CAT).find(k => ql.includes(k));
+  return match ? ML_CAT[match] : 'MLB1430';
 }
 
-const ML_CAT={'tenis masculino':'MLB1430','tenis feminino':'MLB1432','tenis':'MLB1430','nike':'MLB1430','adidas':'MLB1430','mizuno':'MLB1430','notebook':'MLB1652','laptop':'MLB1652','celular':'MLB1051','smartphone':'MLB1051','iphone':'MLB1051','samsung':'MLB1051','mochila':'MLB3258','bolsa':'MLB3258','camiseta':'MLB12482','camisa':'MLB12482','corrida':'MLB260336','esporte':'MLB1276'};
-function mlCategoryFor(q){const ql=q.toLowerCase();const k=Object.keys(ML_CAT).find(k=>ql.includes(k));return k?ML_CAT[k]:'MLB1430';}
-async function mlHighlights(catId, limit) {
+async function mlHighlights(categoryId, limit) {
   const token = await getMlToken();
-  const hl = await httpsGet({ hostname:'api.mercadolibre.com', path:`/highlights/MLB/category/${catId}`, method:'GET', headers:{Authorization:`Bearer ${token}`} });
-  if(hl.status!==200||!hl.body||!hl.body.content) return null;
-  const ids = hl.body.content.slice(0,limit).map(i=>i.id).filter(Boolean);
-  if(!ids.length) return null;
-  // Fetch items one by one (batch /items?ids= is restricted)
+  // Step 1: get highlighted item IDs for category
+  const hl = await httpsGet({
+    hostname: 'api.mercadolibre.com',
+    path: `/highlights/MLB/category/${categoryId}`,
+    method: 'GET', headers: { Authorization: `Bearer ${token}` }
+  });
+  if (hl.status !== 200 || !hl.body || !hl.body.content) return null;
+  const ids = hl.body.content.slice(0, limit).map(i => i.id).filter(Boolean);
+  if (!ids.length) return null;
+  // Step 2: try batch fetch first
+  const batchR = await httpsGet({
+    hostname: 'api.mercadolibre.com',
+    path: `/items?ids=${ids.join(',')}&attributes=id,title,price,sold_quantity,thumbnail,permalink,condition,currency_id`,
+    method: 'GET', headers: { Authorization: `Bearer ${token}` }
+  });
+  if (batchR.status === 200 && Array.isArray(batchR.body)) {
+    const results = batchR.body.filter(i => i.code === 200).map(i => i.body);
+    if (results.length > 0) return { results, paging: { total: results.length, limit, offset: 0 }, source: 'highlights' };
+  }
+  // Batch blocked — try individual fetches
   const items = await Promise.all(ids.map(async id => {
-    const r1 = await httpsGet({ hostname:'api.mercadolibre.com', path:`/items/${id}`, method:'GET', headers:{} });
-    if(r1.status===200&&r1.body&&r1.body.id) return r1.body;
-    const r2 = await httpsGet({ hostname:'api.mercadolibre.com', path:`/items/${id}`, method:'GET', headers:{Authorization:`Bearer ${token}`} });
-    if(r2.status===200&&r2.body&&r2.body.id) return r2.body;
+    const r1 = await httpsGet({ hostname: 'api.mercadolibre.com', path: `/items/${id}`, method: 'GET', headers: {} });
+    if (r1.status === 200 && r1.body && r1.body.id) return r1.body;
+    const r2 = await httpsGet({ hostname: 'api.mercadolibre.com', path: `/items/${id}`, method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+    if (r2.status === 200 && r2.body && r2.body.id) return r2.body;
     return null;
   }));
   const results = items.filter(Boolean);
-  if(!results.length) return null;
-  return { results, paging:{total:results.length,limit,offset:0}, source:'highlights' };
+  if (!results.length) return null;
+  return { results, paging: { total: results.length, limit, offset: 0 }, source: 'highlights' };
 }
+
+async function mlScrapeSearch(q, limit) {
+  const slug = q.trim().replace(/\s+/g, '-').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9-]/g, '');
+  const r = await httpsGetHtml({
+    hostname: 'lista.mercadolivre.com.br',
+    path: `/${slug}`,
+    method: 'GET',
+    headers: {
+      'User-Agent': BROWSER_HEADERS['User-Agent'],
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'pt-BR,pt;q=0.9',
+      'Accept-Encoding': 'identity',
+    }
+  });
+  if (!r || r.status !== 200 || !r.html) return null;
+  const html = r.html;
+  const results = [];
+  const blocks = html.split('<div class="ui-search-result__wrapper');
+  for (let i = 1; i < blocks.length && results.length < limit; i++) {
+    const b = blocks[i];
+    let permalink = '', title = '';
+    const tm1 = b.match(/href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*class="[^"]*poly-component__title[^"]*"[^>]*>([^<]+)/);
+    const tm2 = b.match(/class="[^"]*poly-component__title[^"]*"[^>]*href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*>([^<]+)/);
+    const tm3 = b.match(/<a[^>]+href="(https:\/\/www\.mercadolivre\.com\.br[^"]+)"[^>]*>\s*<h2[^>]*class="[^"]*poly-box[^"]*"[^>]*>\s*([^<]+)/);
+    if (tm1) { permalink = tm1[1]; title = tm1[2].trim(); }
+    else if (tm2) { permalink = tm2[1]; title = tm2[2].trim(); }
+    else if (tm3) { permalink = tm3[1]; title = tm3[2].trim(); }
+    if (!title) continue;
+    const pm = b.match(/class="andes-money-amount__fraction"[^>]*>([\d.,]+)<\/span>/);
+    const cm = b.match(/class="andes-money-amount__cents"[^>]*>(\d+)<\/span>/);
+    const price = pm ? (parseFloat(pm[1].replace(/\./g, '').replace(',', '.')) + (cm ? parseFloat(cm[1]) / 100 : 0)) : null;
+    const im2 = b.match(/data-src="(https:\/\/http[^"]+)"/);
+    const im3 = b.match(/src="(https:\/\/http[^"]+)"/);
+    const thumbnail = im2?.[1] || im3?.[1] || '';
+    const idm = permalink.match(/MLB[\d]+/);
+    const id = idm?.[0] || `scrape-${i}`;
+    results.push({ id, title, price, sold_quantity: 0, thumbnail, permalink: permalink || 'https://www.mercadolivre.com.br', condition: 'new', currency_id: 'BRL' });
+  }
+  if (results.length > 0) return { results, paging: { total: results.length, limit, offset: 0 }, source: 'scrape' };
+  return null;
+}
+
 async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
-  // Try without auth first (our limited-scope token may restrict more than anonymous)
+  // 1. Try anonymous search
   const rAnon = await httpsGet({
     hostname: 'api.mercadolibre.com',
     path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
     method: 'GET', headers: {}
   });
-  if(rAnon.status===200&&rAnon.body&&rAnon.body.results&&rAnon.body.results.length>0)return rAnon.body;
-  // Try with auth token
+  if (rAnon.status === 200 && rAnon.body && rAnon.body.results && rAnon.body.results.length > 0) return rAnon.body;
+  // 2. Try authenticated search
   const token = await getMlToken();
   const r = await httpsGet({
     hostname: 'api.mercadolibre.com',
     path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
     method: 'GET', headers: { Authorization: `Bearer ${token}` }
   });
-  if(r.status===200&&r.body&&r.body.results&&r.body.results.length>0)return r.body;
-  // Highlights fallback
-  const hl=await mlHighlights(mlCategoryFor(q),limit);
-  if(hl&&hl.results&&hl.results.length>0)return hl;
-  // Return empty result set with graceful message
-  return {results:[],paging:{total:0,limit,offset:0},source:'unavailable'};
+  if (r.status === 200 && r.body && r.body.results && r.body.results.length > 0) return r.body;
+  // 3. Fallback: highlights by category
+  const catId = mlCategoryFor(q);
+  const hlResult = await mlHighlights(catId, limit);
+  if (hlResult && hlResult.results && hlResult.results.length > 0) return hlResult;
+  // 4. Last resort: scrape ML listing page
+  const sc = await mlScrapeSearch(q, limit);
+  if (sc && sc.results && sc.results.length > 0) return sc;
+  // All failed
+  return { results: [], paging: { total: 0, limit, offset: 0 }, source: 'unavailable' };
 }
-
 
 async function mlTrends() {
   const token = await getMlToken();
@@ -173,7 +208,7 @@ async function mlTrends() {
   return r.body;
 }
 
-// ── Shopee Brasil ─────────────────────────────────────────────────────────────
+// ── Shopee Brasil ───────────────────────────────────────────────────────────────────────────────
 async function shopeeSearch(q, limit = 10) {
   const qs = `keyword=${encodeURIComponent(q)}&limit=${limit}&newest=0&by=relevancy&order=desc&page_type=search&scenario=PAGE_GLOBAL_SEARCH&version=2`;
   const r = await httpsGet({
@@ -189,7 +224,7 @@ async function shopeeSearch(q, limit = 10) {
   return { platform: 'shopee', total: r.body.total_count || items.length, items };
 }
 
-// ── Google Trends ─────────────────────────────────────────────────────────────
+// ── Google Trends ─────────────────────────────────────────────────────────────────────────────
 async function googleTrends(q) {
   const path = `/trends/api/explore?hl=pt-BR&tz=-180&req=%7B%22comparisonItem%22%3A%5B%7B%22keyword%22%3A%22${encodeURIComponent(q)}%22%2C%22geo%22%3A%22BR%22%2C%22time%22%3A%22today+12-m%22%7D%5D%2C%22category%22%3A0%2C%22property%22%3A%22%22%7D`;
   const r = await httpsGet({
@@ -205,7 +240,7 @@ async function googleTrends(q) {
   } catch { return { error: 'Google Trends indisponível' }; }
 }
 
-// ── Buscape ───────────────────────────────────────────────────────────────────
+// ── Buscapé ─────────────────────────────────────────────────────────────────────────────────────
 async function buscapeSearch(q, limit = 10) {
   const r = await httpsGetHtml({ hostname: 'www.buscape.com.br', path: `/pesquisa?q=${encodeURIComponent(q)}`, method: 'GET', headers: { ...BROWSER_HEADERS, Referer: 'https://www.buscape.com.br/' } });
   const next = extractNextData(r.html);
@@ -218,7 +253,7 @@ async function buscapeSearch(q, limit = 10) {
   return { platform: 'buscape', total: raw.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── Zoom.com.br ───────────────────────────────────────────────────────────────
+// ── Zoom.com.br ───────────────────────────────────────────────────────────────────────────────────
 async function zoomSearch(q, limit = 10) {
   const r = await httpsGetHtml({ hostname: 'www.zoom.com.br', path: `/search?q=${encodeURIComponent(q)}`, method: 'GET', headers: { ...BROWSER_HEADERS, Referer: 'https://www.zoom.com.br/' } });
   const next = extractNextData(r.html);
@@ -231,7 +266,7 @@ async function zoomSearch(q, limit = 10) {
   return { platform: 'zoom', total: raw.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── Google Shopping ───────────────────────────────────────────────────────────
+// ── Google Shopping ─────────────────────────────────────────────────────────────────────────────
 async function googleShoppingSearch(q, limit = 10) {
   if (!GOOGLE_API_KEY) return { error: 'Google Shopping não configurado' };
   const qs = `key=${GOOGLE_API_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(q)}&num=${Math.min(limit,10)}&gl=br&hl=pt`;
@@ -242,7 +277,7 @@ async function googleShoppingSearch(q, limit = 10) {
   return { platform: 'google_shopping', total: r.body.searchInformation?.totalResults || items.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── TikTok Shop ───────────────────────────────────────────────────────────────
+// ── TikTok Shop ───────────────────────────────────────────────────────────────────────────────────
 function tikTokSign(path, params, bodyStr = '') {
   const sorted = Object.keys(params).filter(k => k !== 'sign' && k !== 'access_token').sort().map(k => `${k}${params[k]}`).join('');
   return crypto.createHmac('sha256', TIKTOK_APP_SECRET).update(TIKTOK_APP_SECRET + path + sorted + bodyStr + TIKTOK_APP_SECRET).digest('hex').toUpperCase();
@@ -265,7 +300,7 @@ async function tikTokShopSearch(q, limit = 10) {
   return { platform: 'tiktok_shop', total: r.body?.data?.total_count || items.length, items, price_min: prices.length ? Math.min(...prices) : null, price_max: prices.length ? Math.max(...prices) : null, price_avg: prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : null };
 }
 
-// ── Agregador multi-plataforma ────────────────────────────────────────────────
+// ── Agregador multi-plataforma ────────────────────────────────────────────────────────────────────────────────
 async function platformsSearch(q, limit = 10) {
   const [ml, shopee, buscape, zoom, gshop, tiktok] = await Promise.allSettled([
     mlSearch(q, limit), shopeeSearch(q, limit), buscapeSearch(q, limit),
@@ -312,18 +347,15 @@ async function platformsSearch(q, limit = 10) {
   return result;
 }
 
-// ── Vercel Serverless Handler ─────────────────────────────────────────────────
+// ── Vercel Serverless Handler ─────────────────────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
-  // Parse endpoint from URL path (req.query.slug unreliable in nested api dirs)
-  const _path = new URL(req.url, 'https://x').pathname; // e.g. /api/api/api/status
-  const _parts = _path.split('/').filter(p => p && p !== 'api'); // skip all 'api' segments
-  const endpoint = '/' + _parts.join('/');
-  const slugArr = _parts;
+  const slugArr = Array.isArray(req.query.slug) ? req.query.slug : (req.query.slug ? [req.query.slug] : []);
+  const endpoint = '/' + slugArr.join('/');
   const q     = req.query.q || 'tenis masculino';
   const limit = parseInt(req.query.limit || '10');
 
@@ -331,7 +363,7 @@ module.exports = async (req, res) => {
     let result;
     switch (endpoint) {
       case '/status':
-        result = { status: 'ok', version: '4.0-serverless', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
+        result = { status: 'ok', version: '4.1-scrape', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
         break;
       case '/search':
         result = await mlSearch(q, limit, req.query.sort || 'sold_quantity_desc');
