@@ -129,20 +129,29 @@ const ML_CAT={'tenis masculino':'MLB1430','tenis feminino':'MLB1432','tenis':'ML
 function mlCategoryFor(q){const ql=q.toLowerCase();const k=Object.keys(ML_CAT).find(k=>ql.includes(k));return k?ML_CAT[k]:'MLB1430';}
 async function mlHighlights(catId,limit){const token=await getMlToken();const hl=await httpsGet({hostname:'api.mercadolibre.com',path:`/highlights/MLB/category/${catId}`,method:'GET',headers:{Authorization:`Bearer ${token}`}});if(hl.status!==200||!hl.body||!hl.body.content)return null;const ids=hl.body.content.slice(0,limit).map(i=>i.id).join(',');if(!ids)return null;const ir=await httpsGet({hostname:'api.mercadolibre.com',path:`/items?ids=${ids}&attributes=id,title,price,sold_quantity,thumbnail,permalink,condition,currency_id`,method:'GET',headers:{Authorization:`Bearer ${token}`}});if(ir.status!==200||!Array.isArray(ir.body))return null;const results=ir.body.filter(i=>i.code===200).map(i=>i.body);return{results,paging:{total:results.length,limit,offset:0},source:'highlights'};}
 async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
+  // Try without auth first (our limited-scope token may restrict more than anonymous)
+  const rAnon = await httpsGet({
+    hostname: 'api.mercadolibre.com',
+    path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
+    method: 'GET', headers: {}
+  });
+  if(rAnon.status===200&&rAnon.body&&rAnon.body.results&&rAnon.body.results.length>0)return rAnon.body;
+  // Try with auth token
   const token = await getMlToken();
   const r = await httpsGet({
     hostname: 'api.mercadolibre.com',
     path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
     method: 'GET', headers: { Authorization: `Bearer ${token}` }
   });
-  if(r.status===200&&r.body&&r.body.results)return r.body;
+  if(r.status===200&&r.body&&r.body.results&&r.body.results.length>0)return r.body;
+  // Highlights fallback
   const hl=await mlHighlights(mlCategoryFor(q),limit);
   if(hl&&hl.results&&hl.results.length>0)return hl;
-  // Last resort: scrape ML listing page
-  const scrapeResult = await mlScrapeSearch(q, limit);
-  if(scrapeResult) return scrapeResult;
-  return r.body;
+  // Return empty result set with graceful message
+  return {results:[],paging:{total:0,limit,offset:0},source:'unavailable'};
 }
+
+
 async function mlTrends() {
   const token = await getMlToken();
   const r = await httpsGet({
