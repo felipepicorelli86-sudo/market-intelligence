@@ -266,11 +266,14 @@ module.exports = async (req, res) => {
       case '/debug-hl': {
         const tok = await getMlToken();
         const hlR = await httpsGet({hostname:'api.mercadolibre.com',path:'/highlights/MLB/category/MLB1430',method:'GET',headers:{Authorization:`Bearer ${tok}`}});
-        const sample = hlR.body&&hlR.body.content?hlR.body.content.slice(0,3):hlR.body;
-        const sampleIds = hlR.body&&hlR.body.content?hlR.body.content.slice(0,3).map(i=>i.id).join(','):'';
-        let itemsR={status:'skipped',body:{}};
-        if(sampleIds){itemsR=await httpsGet({hostname:'api.mercadolibre.com',path:`/items?ids=${sampleIds}&attributes=id,title,price`,method:'GET',headers:{Authorization:`Bearer ${tok}`}});}
-        result={hl_status:hlR.status,hl_sample:sample,items_status:itemsR.status,items_body:itemsR.body};
+        const ids = hlR.body&&hlR.body.content?hlR.body.content.slice(0,3).map(i=>i.id):[];
+        // Test item WITHOUT auth
+        let noAuthR={status:'skipped',body:{}};
+        if(ids[0]){noAuthR=await httpsGet({hostname:'api.mercadolibre.com',path:`/items/${ids[0]}?attributes=id,title,price`,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}});}
+        // Test item WITH auth
+        let authR={status:'skipped',body:{}};
+        if(ids[0]){authR=await httpsGet({hostname:'api.mercadolibre.com',path:`/items/${ids[0]}?attributes=id,title,price`,method:'GET',headers:{Authorization:`Bearer ${tok}`,'User-Agent':'Mozilla/5.0'}});}
+        result={ids,no_auth:{status:noAuthR.status,body:noAuthR.body},with_auth:{status:authR.status,body:authR.body}};
         break;
       }
       case '/search':
