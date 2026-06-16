@@ -826,7 +826,7 @@ async function ovSearch() {
     `;
     document.getElementById('ov-insights').innerHTML = `
       <div><div class="insight blue"><div class="insight-label">Dados de referência</div><p>Conectando à API. Os valores acima são estimativas sazonais de referência para o produto pesquisado.</p></div></div>
-      <div><div class="insight amber"><div class="insight-label">Plataformas disponíveis</div><p>Mercado Livre (API oficial) · Shopee BR · Google Trends · TikTok Shop (em breve)</p></div></div>`;
+      <div><div class="insight amber"><div class="insight-label">Plataformas disponíveis</div><p>Mercado Livre (API oficial) · Google Trends</p></div></div>`;
     document.getElementById('ov-chart-badge').textContent = 'Dados de referência';
   }
 
@@ -835,31 +835,21 @@ async function ovSearch() {
 
 function renderPlatformComparison(query, platforms) {
   const ml = platforms.mercadolivre;
-  const sh = platforms.shopee;
-  const tt = platforms.tiktok_shop;
-  const am = platforms.amazon;
 
-  // Summary KPIs (best across platforms)
-  const allPrices = [];
-  if (ml && !ml.error) allPrices.push({ v: ml.price_avg, src: 'ML' });
-  if (sh && !sh.error) allPrices.push({ v: sh.price_avg, src: 'Shopee' });
-  const bestAvg = allPrices.length ? allPrices.reduce((a,b) => a.v < b.v ? a : b) : null;
-  const totalResults = (ml?.total||0) + (sh?.total||0);
+  // Summary KPIs (ML only)
+  const totalResults = ml?.total || 0;
 
   document.getElementById('ov-kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">Anúncios totais</div><div class="kpi-value">${totalResults.toLocaleString('pt-BR')}</div><div class="kpi-sub">ML + Shopee combinados</div></div>
+    <div class="kpi"><div class="kpi-label">Anúncios totais</div><div class="kpi-value">${totalResults.toLocaleString('pt-BR')}</div><div class="kpi-sub">Mercado Livre</div></div>
     ${ml && !ml.error ? `<div class="kpi"><div class="kpi-label">Preço médio ML</div><div class="kpi-value">${fmt(ml.price_avg)}</div><div class="kpi-sub">top 10 mais vendidos</div></div>` : ''}
-    ${sh && !sh.error ? `<div class="kpi"><div class="kpi-label">Preço médio Shopee</div><div class="kpi-value">${fmt(sh.price_avg)}</div><div class="kpi-sub">top 10 resultados</div></div>` : ''}
-    ${bestAvg ? `<div class="kpi"><div class="kpi-label">Menor preço médio</div><div class="kpi-value">${fmt(bestAvg.v)}</div><div class="kpi-sub green">${bestAvg.src}</div></div>` : ''}
+    ${ml && !ml.error && ml.price_min ? `<div class="kpi"><div class="kpi-label">Menor preço ML</div><div class="kpi-value">${fmt(ml.price_min)}</div><div class="kpi-sub green">ML</div></div>` : ''}
+    
   `;
 
-  // Platform cards
-  const maxAvg = Math.max(ml?.price_avg||0, sh?.price_avg||0) || 1;
+  // Platform cards (ML only)
+  const maxAvg = ml?.price_avg || 1;
   const platCards = [
     { key: 'ml',  data: ml, color: '#dc2626' },
-    { key: 'sh',  data: sh, color: '#ea580c' },
-    { key: 'tt',  data: tt, color: '#7c3aed' },
-    { key: 'am',  data: am, color: '#f59e0b' },
   ];
 
   const cardsHtml = platCards.map(({ data, color }) => {
@@ -909,15 +899,14 @@ function renderPlatformComparison(query, platforms) {
       <div class="platform-grid">${cardsHtml}</div>
     </div>`;
 
-  // Top products combined
+  // Top products (ML only)
   const allProds = [];
   if (ml && ml.top3) ml.top3.forEach(p => allProds.push({ ...p, src: 'ML', srcColor: '#dc2626' }));
-  if (sh && sh.top3) sh.top3.forEach(p => allProds.push({ ...p, src: 'Shopee', srcColor: '#ea580c' }));
 
   if (allProds.length) {
     document.getElementById('ov-ml-products-wrap').style.display = '';
     document.getElementById('ov-prod-title').textContent = `Top produtos — ${query}`;
-    document.getElementById('ov-prod-badge').textContent = 'ML + Shopee combinados';
+    document.getElementById('ov-prod-badge').textContent = 'Mercado Livre';
     document.getElementById('ov-prod-grid').innerHTML = allProds.map(p => {
       const cond = p.condition === 'new' ? '<span class="prod-badge new">Novo</span>' : '<span class="prod-badge used">Usado</span>';
       const sales = p.sold ? `<span class="prod-badge sales">🛒 ${Number(p.sold).toLocaleString('pt-BR')}</span>` : '';
@@ -932,19 +921,16 @@ function renderPlatformComparison(query, platforms) {
     }).join('');
   }
 
-  // Insights
-  const mlOk = ml && !ml.error, shOk = sh && !sh.error;
-  const cheaperPlatform = mlOk && shOk ? (ml.price_avg < sh.price_avg ? 'Mercado Livre' : 'Shopee') : (mlOk ? 'Mercado Livre' : 'Shopee');
-  const diffPct = mlOk && shOk && ml.price_avg && sh.price_avg ? Math.abs(Math.round((ml.price_avg - sh.price_avg) / Math.max(ml.price_avg, sh.price_avg) * 100)) : null;
+  // Insights (ML only)
+  const mlOk = ml && !ml.error;
 
   document.getElementById('ov-insights').innerHTML = `
     <div>
       ${mlOk ? `<div class="insight green"><div class="insight-label">Mercado Livre</div><p>${(ml.total||0).toLocaleString('pt-BR')} anúncios · preço médio <strong>${fmt(ml.price_avg)}</strong> · ${ml.sold_total?.toLocaleString('pt-BR')||0} vendas (top 10).</p></div>` : ''}
-      ${shOk ? `<div class="insight amber"><div class="insight-label">Shopee</div><p>${(sh.total||0).toLocaleString('pt-BR')} anúncios · preço médio <strong>${fmt(sh.price_avg)}</strong> · ${sh.sold_total?.toLocaleString('pt-BR')||0} vendas (top 10).</p></div>` : ''}
+      ${!mlOk ? '<div class="insight amber"><div class="insight-label">Mercado Livre</div><p>Busca indisponível no momento. Os trends abaixo são ao vivo.</p></div>' : ''}
     </div>
     <div>
-      ${diffPct !== null ? `<div class="insight blue"><div class="insight-label">Diferença de preço</div><p><strong>${cheaperPlatform}</strong> tem preço médio ${diffPct}% ${cheaperPlatform==='Mercado Livre'?'menor que a Shopee':'menor que o Mercado Livre'} para este produto.</p></div>` : ''}
-      <div class="insight green"><div class="insight-label">TikTok Shop + Amazon</div><p>Integração disponível após aprovação de credenciais nas respectivas plataformas.</p></div>
+      <div class="insight blue"><div class="insight-label">Dados em tempo real</div><p>Preços e anúncios coletados diretamente da API oficial do Mercado Livre.</p></div>
     </div>`;
 
   document.getElementById('ov-chart-badge').textContent = 'Referência histórica · tênis masc.';
