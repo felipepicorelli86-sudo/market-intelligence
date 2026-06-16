@@ -1,4 +1,4 @@
-// api/[...slug].js — Market Intelligence Serverless API v4.3
+// api/[...slug].js — Market Intelligence Serverless API v4.4
 // Vercel Serverless adapter — todas as rotas em produção
 
 const https  = require('https');
@@ -326,7 +326,7 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const slugArr = Array.isArray(req.query.slug) ? req.query.slug : (req.query.slug ? [req.query.slug] : []);
-  const endpoint = '/' + slugArr.join('/');
+  const endpoint = slugArr.length > 0 ? ('/' + slugArr.join('/')) : ((req.url||'/').split('?')[0].replace('/api/api/api','') || '/');
   const q     = req.query.q || 'tenis masculino';
   const limit = parseInt(req.query.limit || '10');
 
@@ -334,7 +334,7 @@ module.exports = async (req, res) => {
     let result;
     switch (endpoint) {
       case '/status':
-        result = { status: 'ok', version: '4.3-scrape', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
+        result = { status: 'ok', version: '4.4-url', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
         break;
       case '/search':
         result = await mlSearch(q, limit, req.query.sort || 'sold_quantity_desc');
