@@ -1,4 +1,4 @@
-// api/[...slug].js — Market Intelligence Serverless API v4.2
+// api/[...slug].js — Market Intelligence Serverless API v4.3
 // Vercel Serverless adapter — todas as rotas em produção
 
 const https  = require('https');
@@ -163,25 +163,9 @@ async function mlScrapeSearch(q, limit) {
 }
 
 async function mlSearch(q, limit = 10, sort = 'sold_quantity_desc') {
-  // 1. Anonymous search (fast fail expected — 403 PolicyAgent)
-  const rAnon = await httpsGet({
-    hostname: 'api.mercadolibre.com',
-    path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
-    method: 'GET', headers: {}
-  });
-  if (rAnon.status === 200 && rAnon.body && rAnon.body.results && rAnon.body.results.length > 0) return rAnon.body;
-  // 2. Authenticated search (fast fail expected — 403 PolicyAgent)
-  const token = await getMlToken();
-  if (token) {
-    const r = await httpsGet({
-      hostname: 'api.mercadolibre.com',
-      path: `/sites/MLB/search?q=${encodeURIComponent(q)}&limit=${limit}&sort=${sort}`,
-      method: 'GET', headers: { Authorization: `Bearer ${token}` }
-    });
-    if (r.status === 200 && r.body && r.body.results && r.body.results.length > 0) return r.body;
-  }
+  // Direct ML search API hangs from Vercel gru1 -- skip entirely
   // 3. Highlights by category (IDs work, items batch fails fast)
-  const hlResult = await mlHighlights(mlCategoryFor(q), limit);
+    const hlResult = await mlHighlights(mlCategoryFor(q), limit);
   if (hlResult && hlResult.results && hlResult.results.length > 0) return hlResult;
   // 4. Scrape ML listing page (SSR HTML, no JS required)
   const sc = await mlScrapeSearch(q, limit);
@@ -350,7 +334,7 @@ module.exports = async (req, res) => {
     let result;
     switch (endpoint) {
       case '/status':
-        result = { status: 'ok', version: '4.2-scrape', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
+        result = { status: 'ok', version: '4.3-scrape', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
         break;
       case '/search':
         result = await mlSearch(q, limit, req.query.sort || 'sold_quantity_desc');
