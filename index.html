@@ -1256,7 +1256,7 @@ async function mlSearch() {
 async function initML() {
   setStatus('loading', 'Conectando à API…');
   try {
-    const ping = await fetch('/api/api/api/status', { signal: AbortSignal.timeout(5000) });
+    const ping = await fetch('/api/api/api/status', { signal: AbortSignal.timeout(15000) });
     if (!ping.ok) throw new Error('api offline');
     mlProxyOnline = true;
     setStatus('connected', '✅  API conectada — carregando dados…');
@@ -1275,7 +1275,7 @@ async function loadMLData(query) {
   const q = encodeURIComponent(query);
     let mlToken = null;
   try {
-    const tr = await fetch(`${PROXY}/token`, { signal: AbortSignal.timeout(5000) });
+    const tr = await fetch(`${PROXY}/token`, { signal: AbortSignal.timeout(15000) });
     if (tr.ok) mlToken = (await tr.json()).token;
   } catch(e) {}
 
@@ -1329,7 +1329,7 @@ async function loadMLData(query) {
     const newCount = results.filter(p => p.condition === 'new').length;
     const usedCount = results.length - newCount;
     if (mlCondChart) mlCondChart.destroy();
-    mlCondChart = new Chart(document.getElementById('mlCondChart'), {
+    mlCondChart = new Chart((document.getElementById('mlCondChart') || document.createElement('canvas')), {
       type: 'doughnut',
       data: {
         labels: ['Novo', 'Usado'],
@@ -1368,7 +1368,7 @@ async function loadMLData(query) {
 
 // Auto-check when page loads (silent, no flicker on other tabs)
 window.addEventListener('load', () => {
-  fetch('/api/api/api/status', { signal: AbortSignal.timeout(5000) })
+  fetch('/api/api/api/status', { signal: AbortSignal.timeout(15000) })
     .then(r => r.ok && r.json())
     .then(d => { if (d && d.status === 'ok') {
       document.getElementById('tab-ml').innerHTML = 'Mercado Livre API <span style="background:#16a34a;color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:600">● LIVE</span>';
