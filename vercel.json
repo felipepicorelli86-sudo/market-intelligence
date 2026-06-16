@@ -1,5 +1,5 @@
 {
-  "regions": ["gru1"],
+  "regions": ["iad1"],
   "functions": {
     "api/api/api/[...slug].js": {
       "maxDuration": 30,
