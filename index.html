@@ -1273,11 +1273,23 @@ async function initML() {
 async function loadMLData(query) {
   window._mlLoaded = true;
   const q = encodeURIComponent(query);
-  const [searchData, trendsData] = await Promise.allSettled([
-    fetch(`/api/api/api/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json()),
-    fetch('/api/api/api/trends').then(r => r.json())
-  ]);
+    let mlToken = null;
+  try {
+    const tr = await fetch(`${PROXY}/token`, { signal: AbortSignal.timeout(5000) });
+    if (tr.ok) mlToken = (await tr.json()).token;
+  } catch(e) {}
 
+  const searchPromise = mlToken
+    ? fetch(`https://api.mercadolibre.com/sites/MLB/search?q=${q}&limit=20&sort=sold_quantity_desc`,
+        { headers: { Authorization: `Bearer ${mlToken}` }, signal: AbortSignal.timeout(12000) })
+        .then(r => r.json())
+        .then(d => ({ results: d.results || [], paging: d.paging || {} }))
+    : fetch(`${PROXY}/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json());
+
+  const [searchData, trendsData] = await Promise.allSettled([
+    searchPromise,
+    fetch(PROXY + '/trends').then(r => r.json())
+  ]);
   document.getElementById('ml-setup').style.display = 'none';
   document.getElementById('ml-live').style.display = '';
 
