@@ -1273,18 +1273,8 @@ async function initML() {
 async function loadMLData(query) {
   window._mlLoaded = true;
   const q = encodeURIComponent(query);
-    let mlToken = null;
-  try {
-    const tr = await fetch(`${PROXY}/token`, { signal: AbortSignal.timeout(15000) });
-    if (tr.ok) mlToken = (await tr.json()).token;
-  } catch(e) {}
-
-  const searchPromise = mlToken
-    ? fetch(`https://api.mercadolibre.com/sites/MLB/search?q=${q}&limit=20&sort=sold_quantity_desc`,
-        { headers: { Authorization: `Bearer ${mlToken}` }, signal: AbortSignal.timeout(12000) })
-        .then(r => r.json())
-        .then(d => ({ results: d.results || [], paging: d.paging || {} }))
-    : fetch(`${PROXY}/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json());
+  const PROXY = '/api/api/api';
+        const searchPromise = fetch(`${PROXY}/search?q=${q}&limit=20&sort=sold_quantity_desc`).then(r => r.json());
 
   const [searchData, trendsData] = await Promise.allSettled([
     searchPromise,
