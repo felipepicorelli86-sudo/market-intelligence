@@ -336,6 +336,9 @@ module.exports = async (req, res) => {
       case '/status':
         result = { status: 'ok', version: '4.4-url', time: new Date().toISOString(), sources: { mercadolivre: 'ativo', shopee: 'ativo', buscape: 'ativo', zoom: 'ativo', google_shopping: GOOGLE_API_KEY ? 'ativo' : 'inativo', tiktok_shop: TIKTOK_APP_KEY ? (tikTokAccessToken ? 'ativo' : 'pendente token') : 'pendente credenciais' } };
         break;
+      case '/token':
+        result = { token: await getMlToken() };
+        break;
       case '/search':
         result = await mlSearch(q, limit, req.query.sort || 'sold_quantity_desc');
         break;
