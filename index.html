@@ -815,6 +815,7 @@ async function ovSearch() {
 
   if (platData && platData.platforms) {
     renderPlatformComparison(query, platData.platforms);
+    if (!(platData.platforms?.mercadolivre?.total > 0)) { var kpiEl=document.getElementById('ov-kpis'); if(kpiEl) kpiEl.innerHTML='<div class="kpi" style="grid-column:1/-1;text-align:center"><div class="kpi-label">&#9888;&#65039; Mercado Livre indispon&iacute;vel</div><div class="kpi-value" style="font-size:1rem;color:#888">Busca bloqueada no servidor</div><div class="kpi-sub">Veja as tend&ecirc;ncias em tempo real abaixo &#x2193;</div></div>'; }
   } else {
     // _mlEndpoint offline
     document.getElementById('ov-_mlEndpoint-warn').style.display = '';
@@ -1269,7 +1270,7 @@ async function loadMLData(query) {
   document.getElementById('ml-setup').style.display = 'none';
   document.getElementById('ml-live').style.display = '';
 
-  if (searchData.status === 'fulfilled' && searchData.value.results) {
+  if (searchData.status === 'fulfilled' && searchData.value.results && searchData.value.results.length > 0) {
     const results = searchData.value.results;
     const paging = searchData.value.paging || {};
 
